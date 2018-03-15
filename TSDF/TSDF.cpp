@@ -1,28 +1,7 @@
 #include "TSDF.h"
 #include "utils.h"
-#include <pcl/io/ply_io.h>
-#include <pcl/common/common_headers.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/visualization/cloud_viewer.h>
 
 //#define VISUALIZE
-
-
-std::shared_ptr<pcl::visualization::PCLVisualizer> rgbVis(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud)
-{
-	// --------------------------------------------
-	// -----Open 3D viewer and add point cloud-----
-	// --------------------------------------------
-	std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
-	viewer->setBackgroundColor(0, 0, 0);
-	pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud);
-	viewer->addPointCloud<pcl::PointXYZRGB>(cloud, rgb, "cloud");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud");
-	viewer->addCoordinateSystem(1.0);
-	viewer->initCameraParameters();
-	return (viewer);
-}
-
 
 TSDF::TSDF(cv::Scalar intrinsics)
 {
@@ -75,7 +54,7 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 		cv::divide(vol_end_ - vol_start_, vol_dim_, vol_res_);
 
 		mu_ = 2 * vol_res_;
-		tsdf_ = cv::Mat(tex_dim_[1], tex_dim_[0], CV_32F, cv::Scalar(0));
+		tsdf_ = cv::Mat(tex_dim_[1], tex_dim_[0], CV_32F, cv::Scalar(mu_[0]));
 		tsdf_wt_ = cv::Mat(tex_dim_[1], tex_dim_[0], CV_32S, cv::Scalar(0));
 		tsdf_color_ = cv::Mat(tex_dim_[1], tex_dim_[0], CV_32SC3, cv::Scalar(0));
 		parse_frame(depth, color, extrinsics, mean_depth);
@@ -124,10 +103,11 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 				diff = std::max(std::min(diff, mu_[0]), -mu_[0]);
 
 				int weight = 1;
-				tsdf_ptr[flattened_idx] = tsdf_ptr[flattened_idx] * tsdf_wt_ptr[flattened_idx] + weight * float(diff);
-				tsdf_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
 				// only consider valid ones
-				if (depth.at<uint16_t>(color.rows - y - 1, x) != 0) {
+				if (tsdf_wt_ptr[flattened_idx] != 0) {
+
+					tsdf_ptr[flattened_idx] = tsdf_ptr[flattened_idx] * tsdf_wt_ptr[flattened_idx] + weight * float(diff);
+					tsdf_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
 
 					const auto& color_elem = color.at<cv::Vec3b>(color.rows - y - 1, x);
 					cv::Vec3i colors_to_add = { color_elem[0], color_elem[1], color_elem[2] };
@@ -136,34 +116,27 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 					cv::add(tsdf_color_ptr[flattened_idx], colors_to_add, tsdf_color_ptr[flattened_idx]);
 					tsdf_color_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
 				}
+				else {
+					tsdf_ptr[flattened_idx] = weight * float(diff);
+
+					const auto& color_elem = color.at<cv::Vec3b>(color.rows - y - 1, x);
+					cv::Vec3i colors_to_add = { color_elem[0], color_elem[1], color_elem[2] };
+					colors_to_add *= weight;
+					tsdf_color_ptr[flattened_idx] = colors_to_add;
+				}
 
 				tsdf_wt_ptr[flattened_idx] += weight;
 #ifdef VISUALIZE
 				// visualize
-				pcl::PointXYZRGB point;
 				double ratio = (diff + mu_[0]) / mu_[0] / 2;
 				if (ratio > 0.5 || ratio < 0.1) continue;
 				test.at<unsigned char>(y, x) = 255;
-				point.x = pos_inhomo.val[0];
-				point.y = pos_inhomo.val[1];
-				point.z = pos_inhomo.val[2];
-
-				point.r = tsdf_color_ptr[flattened_idx].val[2];
-				point.g = tsdf_color_ptr[flattened_idx].val[1];
-				point.b = tsdf_color_ptr[flattened_idx].val[0];
-				point_cloud_ptr->points.push_back(point);
 #endif
 			}
 		}
 #ifdef VISUALIZE
 		cv::imshow("VIS", test);
 		cv::waitKey(30);
-		auto viewer = rgbVis(point_cloud_ptr);
-		while (!viewer->wasStopped())
-		{
-			viewer->spinOnce(100);
-			// std::this_thread::sleep (std::posix_time::microseconds (100000));
-		}
 #endif
 	}
 }

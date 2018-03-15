@@ -10,7 +10,7 @@ bool ViewShader::init() {
 	int *uniformIds[] = { &mUniformTex, &mUniformS2W, &mUniformC, &mUniformVolDim, &mUniformVolStart, &mUniformVolEnd };
 	const int uniformsCount = sizeof(uniforms) / sizeof(uniforms[0]);
 
-	res &= mProgram.load("C://Users//44762//source//repos//SfM//SfM//shaders//tsdf_render.vert", "C://Users//44762//source//repos//SfM//SfM//shaders//tsdf_render.frag", uniforms, uniformIds, uniformsCount, attribs, attribIds, attribsCount);
+	res &= mProgram.load("C://Users//44762//source//repos//SfM//SfM//TSDF//shaders//tsdf_render.vert", "C://Users//44762//source//repos//SfM//SfM//TSDF//shaders//tsdf_render.frag", uniforms, uniformIds, uniformsCount, attribs, attribIds, attribsCount);
 	glGenBuffers(2, vbos);
 	glGenVertexArrays(1, &vao);
 
