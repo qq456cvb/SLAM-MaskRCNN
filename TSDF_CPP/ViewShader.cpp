@@ -15,7 +15,7 @@ bool ViewShader::init() {
 	glGenVertexArrays(1, &vao);
 
 	float vertices[] =
-	{ -1., -1., -1., 1., 1.0, -1., 1., 1. };
+	{ -1., -1., -1., 1., 1., -1., 1., 1. };
 	float textureCoords[] =
 	{ 0, 1.f, 0, 0, 1.f, 1.f, 1.f, 0 };
 

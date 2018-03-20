@@ -204,6 +204,7 @@ int main()
 	});
 	for (size_t i = 0; i < 5; i++) {
 		while (depth_timestamps[i] < mask_timestamps[j]) i++;
+		while (mask_timestamps[j] < depth_timestamps[i]) j++;
 		auto depth_img = cv::imread(depth_fn[i], CV_LOAD_IMAGE_ANYDEPTH);
 		auto mask_img = cv::imread(mask_fn[j], CV_LOAD_IMAGE_GRAYSCALE);
 		auto rgb_img = cv::imread(rgb_fn[j]);
@@ -224,8 +225,6 @@ int main()
 		auto low = traj.lower_bound(depth_timestamps[i]);
 		auto extrinsic = parse_pos(low->second);
 		tsdf->parse_frame(depth_img, rgb_img, extrinsic, mean);
-		
-		while (mask_timestamps[j] < depth_timestamps[i]) j++;
 	}
 	show_tsdf(*tsdf);
 	return 0;

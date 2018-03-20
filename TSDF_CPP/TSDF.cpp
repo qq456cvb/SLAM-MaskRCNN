@@ -1,7 +1,7 @@
 #include "TSDF.h"
 #include "utils.h"
 
-//#define VISUALIZE
+#define VISUALIZE
 
 TSDF::TSDF(cv::Scalar intrinsics)
 {
@@ -44,7 +44,7 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 		std::cout << tl << std::endl;
 		std::cout << br << std::endl;
 
-		double half_side = sqrt(pow(tl.at<double>(0, 0) - br.at<double>(0, 0), 2) + pow(tl.at<double>(1, 0) - br.at<double>(1, 0), 2));
+		double half_side = sqrt(pow(tl.at<double>(0, 0) - br.at<double>(0, 0), 2) + pow(tl.at<double>(1, 0) - br.at<double>(1, 0), 2)) / 2;
 		cv::Mat center = intrinsics_inv_ * cv::Mat(3, 1, CV_64F, std::vector<double>({ ((double)min_rect.br().x + (double)min_rect.tl().x) / 2.0, 
 			(color.rows - 1 - (double)min_rect.br().y + color.rows - 1 - (double)min_rect.tl().y) / 2.0, 1.0 }).data());
 		center = center * mean_depth / 5000;
@@ -61,7 +61,6 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 	}
 	else {
 #ifdef VISUALIZE
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
 		cv::Mat test(480, 640, CV_8UC1, cv::Scalar(0));
 #endif
 		float* tsdf_ptr = (float*)tsdf_.data;
@@ -83,7 +82,6 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 				// assume identity camera matrix
 				cv::Mat pos_homo(4, 1, CV_64F, cv::Scalar(1));
 				std::memmove(pos_homo.data, pos_inhomo.val, 3 * sizeof(double));
-				for (int l = 0; l < 3; l++) pos_homo.at<double>(l, 0) = pos_inhomo[l];
 
 				cv::Mat proj = mult_extrinsic(init_pos_inv_, extrinsics) * pos_homo;
 				cv::Mat pixel = intrinsics_ * proj;
@@ -102,30 +100,32 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 				
 				diff = std::max(std::min(diff, mu_[0]), -mu_[0]);
 
-				int weight = 1;
-				// only consider valid ones
-				if (tsdf_wt_ptr[flattened_idx] != 0) {
+				if (std::abs(diff) < mu_[0]) {
+					int weight = 1;
+					// only consider valid ones
+					if (tsdf_wt_ptr[flattened_idx] != 0) {
 
-					tsdf_ptr[flattened_idx] = tsdf_ptr[flattened_idx] * tsdf_wt_ptr[flattened_idx] + weight * float(diff);
-					tsdf_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
+						tsdf_ptr[flattened_idx] = tsdf_ptr[flattened_idx] * tsdf_wt_ptr[flattened_idx] + weight * float(diff);
+						tsdf_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
 
-					const auto& color_elem = color.at<cv::Vec3b>(color.rows - y - 1, x);
-					cv::Vec3i colors_to_add = { color_elem[0], color_elem[1], color_elem[2] };
-					colors_to_add *= weight;
-					cv::multiply(tsdf_color_ptr[flattened_idx], tsdf_wt_ptr[flattened_idx], tsdf_color_ptr[flattened_idx]);
-					cv::add(tsdf_color_ptr[flattened_idx], colors_to_add, tsdf_color_ptr[flattened_idx]);
-					tsdf_color_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
+						const auto& color_elem = color.at<cv::Vec3b>(color.rows - y - 1, x);
+						cv::Vec3i colors_to_add = { color_elem[0], color_elem[1], color_elem[2] };
+						colors_to_add *= weight;
+						cv::multiply(tsdf_color_ptr[flattened_idx], tsdf_wt_ptr[flattened_idx], tsdf_color_ptr[flattened_idx]);
+						cv::add(tsdf_color_ptr[flattened_idx], colors_to_add, tsdf_color_ptr[flattened_idx]);
+						tsdf_color_ptr[flattened_idx] /= (tsdf_wt_ptr[flattened_idx] + weight);
+					}
+					else {
+						tsdf_ptr[flattened_idx] = weight * float(diff);
+
+						const auto& color_elem = color.at<cv::Vec3b>(color.rows - y - 1, x);
+						cv::Vec3i colors_to_add = { color_elem[0], color_elem[1], color_elem[2] };
+						colors_to_add *= weight;
+						tsdf_color_ptr[flattened_idx] = colors_to_add;
+					}
+
+					tsdf_wt_ptr[flattened_idx] += weight;
 				}
-				else {
-					tsdf_ptr[flattened_idx] = weight * float(diff);
-
-					const auto& color_elem = color.at<cv::Vec3b>(color.rows - y - 1, x);
-					cv::Vec3i colors_to_add = { color_elem[0], color_elem[1], color_elem[2] };
-					colors_to_add *= weight;
-					tsdf_color_ptr[flattened_idx] = colors_to_add;
-				}
-
-				tsdf_wt_ptr[flattened_idx] += weight;
 #ifdef VISUALIZE
 				// visualize
 				double ratio = (diff + mu_[0]) / mu_[0] / 2;
@@ -135,7 +135,8 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 			}
 		}
 #ifdef VISUALIZE
-		cv::imshow("VIS", test);
+		//cv::imshow("VIS", test);
+		cv::imshow("VIS", tsdf_color_);
 		cv::waitKey(30);
 #endif
 	}
