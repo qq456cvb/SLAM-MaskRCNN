@@ -33,13 +33,12 @@ vec2 indToTex(vec3 ind, vec2 texel, float tex_dim) {
 
     // add texel / 2 to adjust dicrete coordinates to continous one
     vec2 tex_ind = vec2(tex_ind_x, tex_ind_y) * texel + texel / 2;
-    // tex_ind.y = 1. - tex_ind.y;
     return tex_ind;
 }
 
 // TODO: utilize opengl's interpolation
 vec4 interpTsdf(vec3 pos, vec2 texel, float tex_dim, float voxel) {
-    pos += 0.00001f;
+//    pos += 0.00001f;
     vec3 ind = (pos - volStart) / voxel;
     vec3 interp = fract(ind);
     ind = floor(ind);
@@ -66,7 +65,7 @@ void main(void)
     float tex_dim = sqrt(vol_dim * vol_dim * vol_dim);
     vec2 texel = vec2(1.0/tex_dim);
 
-    vec4 screen_pos = vec4(vec2(vTexCoord.x, 1.0 - vTexCoord.y) * vec2(640, 480), 1, 1);
+    vec4 screen_pos = vec4(vec2(vTexCoord.x, vTexCoord.y) * vec2(640, 480), 1, 1);
     vec4 target = s2w * screen_pos;
     vec3 d = target.xyz - c;
     d = normalize(d);

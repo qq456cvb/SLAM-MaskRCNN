@@ -5,13 +5,15 @@ import sdl2
 import sys
 from OpenGL import GL as gl
 from OpenGL.GL import shaders
-from viewer import Viewer
+from TSDF_Python.viewer import Viewer
 import ctypes
 import math
 
 
 def filter_gaussian(img):
     threshold = 3
+    if np.sum(img) == 0:
+        return img, 0
     mean = np.mean(img[img > 0])
     std = np.std(img[img > 0])
     img[abs(img-mean) > threshold * std] = 0
@@ -56,7 +58,7 @@ def transform44(l):
         (q[0, 2] - q[1, 3], q[1, 2] + q[0, 3], 1.0 - q[0, 0] - q[1, 1], t[2]),
         (0.0, 0.0, 0.0, 1.0)
     ), dtype=np.float64)
-    return mat
+    return np.linalg.inv(mat)
 
 
 def parse_pos(pos):
@@ -73,6 +75,33 @@ def parse_pos(pos):
     extrinsic[:3, :3] = rot
     extrinsic[:-1, -1] = pos[:3]
     return np.linalg.inv(extrinsic)
+
+
+def slerp(q1, q2, t):
+    q1 = q1 / np.linalg.norm(q1)
+    q2 = q2 / np.linalg.norm(q2)
+
+    dot = np.dot(q1, q2)
+
+    if dot < 0:
+        q1 = -q1
+        dot = -dot
+
+    if dot > 0.9995:
+        result = q1 + t * (q2 - q1)
+        return result
+
+    dot = max(min(dot, 1), -1)
+    theta_0 = math.acos(dot)
+    theta = theta_0 * t
+
+    s1 = math.cos(theta) - dot * math.sin(theta) / math.sin(theta_0)
+    s2 = math.sin(theta) / math.sin(theta_0)
+    return s1 * q1 + s2 * q2
+
+
+def fix_distortion(img, intrinsic, dist):
+    return cv2.undistort(img, intrinsic, dist)
 
 
 def show_model(tsdf):
@@ -134,13 +163,13 @@ def show_model(tsdf):
             #     print("SDL_MOUSEMOTION")
             # if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
             #     print("SDL_MOUSEBUTTONDOWN")
-        mean_depth = 0.8
+        mean_depth = tsdf.mean_depth
         rot = np.array([[math.cos(angle), 0, -math.sin(angle), mean_depth * math.sin(angle)],
                         [0, 1, 0, 0],
                         [math.sin(angle), 0, math.cos(angle), mean_depth - mean_depth * math.cos(angle)],
                         [0, 0, 0, 1]])
         viewer.set_s2w(np.matmul(rot, tsdf.intrinsic_inv))
-        viewer.set_c(np.array([mean_depth * math.sin(angle), 0, mean_depth - mean_depth * math.cos(angle)]))
+        viewer.set_c(np.array([(mean_depth + 0.5) * math.sin(angle), 0, (mean_depth + 0.5) - (mean_depth + 0.5) * math.cos(angle)]))
 
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
         gl.glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)

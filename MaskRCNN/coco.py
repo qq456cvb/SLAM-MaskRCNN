@@ -45,9 +45,9 @@ import zipfile
 import urllib.request
 import shutil
 
-from config import Config
-import utils
-import model as modellib
+from MaskRCNN.config import Config
+import MaskRCNN.utils
+import MaskRCNN.model as modellib
 
 # Root directory of the project
 ROOT_DIR = os.getcwd()
@@ -88,7 +88,7 @@ class CocoConfig(Config):
 #  Dataset
 ############################################################
 
-class CocoDataset(utils.Dataset):
+class CocoDataset(MaskRCNN.utils.Dataset):
     def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
                   class_map=None, return_coco=False, auto_download=False):
         """Load a subset of the COCO dataset.
