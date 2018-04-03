@@ -1,8 +1,12 @@
 import os
-from MaskRCNN import coco
-import MaskRCNN.model as modellib
+# from MaskRCNN import coco
+# import MaskRCNN.model as modellib
 import cv2
-from MaskRCNN import visualize
+import utils
+from matplotlib import pyplot as plt
+
+# from MaskRCNN import visualize
+import numpy as np
 
 
 # Root directory of the project
@@ -34,29 +38,123 @@ class_names = ('BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
                'teddy bear', 'hair drier', 'toothbrush')
 
-
-class InferenceConfig(coco.CocoConfig):
-    # Set batch size to 1 since we'll be running inference on
-    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
+#
+# class InferenceConfig(coco.CocoConfig):
+#     # Set batch size to 1 since we'll be running inference on
+#     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+#     GPU_COUNT = 1
+#     IMAGES_PER_GPU = 1
 
 
 if __name__ == '__main__':
 
-    config = InferenceConfig()
+    # config = InferenceConfig()
+    #
+    # # Create model object in inference mode.
+    # model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+    #
+    # # Load weights trained on MS-COCO
+    # model.load_weights(COCO_MODEL_PATH, by_name=True)
+    #
+    intrinsic = np.array([[520, 0, 360, 0],
+                         [0, 520, 270, 0],
+                         [0, 0, 1, 0],
+                         [0, 0, 0, 1]])
+    intrinsic = intrinsic[:3, :3]
 
-    # Create model object in inference mode.
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+    cap = cv2.VideoCapture('seq1.mp4')
+    _, img1 = cap.read()
+    interval = 30
+    cnt = 0
+    while cap.isOpened():
+        cnt += 1
+        if cnt % interval != 0:
+            _, _ = cap.read()
+            continue
 
-    # Load weights trained on MS-COCO
-    model.load_weights(COCO_MODEL_PATH, by_name=True)
+        _, img2 = cap.read()
+        img1 = cv2.pyrDown(img1)
+        img2 = cv2.pyrDown(img2)
+        # cv2.imshow('img1', img1)
+        # cv2.imshow('img2', img2)
+        # cv2.waitKey(0)
+        pts1, pts2 = utils.match(img1, img2)
 
-    for i in range(1, 2):
-        img = cv2.imread('test_images/%d.jpeg' % i)
-        img = cv2.resize(img, None, fx=0.3, fy=0.3, interpolation=cv2.INTER_AREA)
-        r = model.detect([img], verbose=0)[0]
-        print(r)
-        visualize.display_instances(img, r['rois'], r['masks'], r['class_ids'],
-                                    class_names, r['scores'])
+        ess_mat, idx = cv2.findEssentialMat(pts1, pts2, intrinsic, cv2.RANSAC)
+        print(ess_mat)
+
+        pts1 = pts1[np.squeeze(idx.astype(np.bool)), :]
+        pts2 = pts2[np.squeeze(idx.astype(np.bool)), :]
+        img_pts = np.concatenate([np.expand_dims(pts1, 1), np.expand_dims(pts2, 1)], axis=1)
+        print(img_pts.shape)
+        RT = utils.estimate_RT_from_E(ess_mat, img_pts, intrinsic)
+        print(RT)
+
+        intrinsic_inv = np.linalg.inv(intrinsic)
+        fund_mat = np.matmul(np.matmul(intrinsic_inv.transpose(), ess_mat), intrinsic_inv)
+        H1 = np.zeros([3, 3])
+        H2 = np.zeros_like(H1)
+        cv2.stereoRectifyUncalibrated(pts1, pts2, fund_mat, (img1.shape[1], img1.shape[0]), H1, H2)
+        print(H1)
+        print(H2)
+        img1_warped = cv2.warpPerspective(img1, H1, (0, 0))
+        img2_warped = cv2.warpPerspective(img2, H2, (0, 0))
+        fig = plt.figure()
+        ax1 = fig.add_subplot(1, 2, 1)
+        ax1.imshow(img1_warped)
+        ax2 = fig.add_subplot(1, 2, 2)
+        ax2.imshow(img2_warped)
+        plt.show()
+        # block_matcher = cv2.StereoBM_create(32, 15)
+        block_matcher = cv2.StereoSGBM.create(numDisparities=32, blockSize=13, uniquenessRatio=8, speckleWindowSize=50,
+                                              speckleRange=1, mode=cv2.STEREO_SGBM_MODE_HH4)
+        # cv2.STEREO_BM_PREFILTER_NORMALIZED_RESPONSE, 0, 5)
+        # disp = block_matcher.compute(img1_warped, img1_warped)
+        disp = block_matcher.compute(cv2.cvtColor(img1_warped, cv2.COLOR_BGR2GRAY),
+                                     cv2.cvtColor(img2_warped, cv2.COLOR_BGR2GRAY))
+
+        plt.imshow(disp.astype(np.float32))
+        plt.show()
+
+        # proj1 = np.eye(4)[:3, :]
+        # proj2 = np.zeros([3, 4])
+        # proj2[:3, :3] = RT[:3, :3].transpose()
+        # proj2[:3, -1] = -np.dot(RT[:3, :3], RT[:3, -1])
+        # proj1 = np.matmul(H1, proj1)
+        # proj2 = np.matmul(H2, proj2)
+        # x, y = np.meshgrid(np.arange(img1.shape[1]), np.arange(img1.shape[0]))
+        # pts_left = np.dstack([x, y]).reshape(-1, 2).transpose()
+        # x = x + disp
+        # pts_right = np.dstack([x, y]).reshape(-1, 2).transpose()
+        # pts_all = cv2.triangulatePoints(proj1, proj2, pts_left[:, :1000], pts_right[:, :1000])
+
+        # with open('test.ply', 'w+') as f:
+        #     f.write('ply format ascii 1.0\n'
+        #             'element vertex %d\n'
+        #             'property float x\n'
+        #             'property float y\n'
+        #             'property float z\n'
+        #             'end_header\n' % pts_all.shape[1])
+        #     # for i in range(pts_all.shape[1]):
+        #     #     f.write('%f %f %f\n' % (pts_all[0, i], pts_all[1, i], pts_all[2, i]))
+        #     f.close()
+        img1 = img2
+        break
+    # print(pts1.shape)
+    # print(np.sum(np.diag(abs(np.matmul(np.matmul(np.hstack([pts2, np.ones([pts2.shape[0], 1])]), fund_mat),  np.hstack([pts1, np.ones([pts1.shape[0], 1])]).transpose())))))
+
+
+    # cv2.drawKeypoints(img1, pts1, img1)
+    # plt.imshow(img1)
+    # plt.imshow(img2)
+    # plt.show()
+
+    # for i in range(1, 2):
+    #     img = cv2.imread('test_images/%d.jpg' % i)
+    #     img = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+    #     r = model.detect([img], verbose=0)[0]
+    #     print(r)
+    #     visualize.display_instances(img, r['rois'], r['masks'], r['class_ids'],
+    #                                 class_names, r['scores'], figsize=(6, 8))
+
 

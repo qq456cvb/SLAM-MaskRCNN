@@ -65,7 +65,7 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, const cv::Mat
 #endif
 		float* tsdf_ptr = (float*)tsdf_.data;
 		cv::Vec3i* tsdf_color_ptr = (cv::Vec3i*)tsdf_color_.data;
-		int32_t*tsdf_wt_ptr = (int32_t*)tsdf_wt_.data;
+		int32_t* tsdf_wt_ptr = (int32_t*)tsdf_wt_.data;
 		for (int i = 0; i < tex_dim_[1]; i++) {
 			for (int j = 0; j < tex_dim_[0]; j++) {
 				auto flattened_idx = i * tex_dim_[0] + j;
