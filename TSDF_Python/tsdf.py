@@ -53,14 +53,17 @@ class TSDF:
             self.init_vars(depth, color, extrinsic, mean_depth)
             self.parse_frame(depth, color, extrinsic, mean_depth, masks)
         else:
-            tsdf_cuda.tsdf_update(self.tsdf_diff, self.tsdf_color, self.tsdf_wt, self.vol_dim, self.vol_start, self.voxel[0], self.mu, self.intrinsic, self.intrinsic_inv, depth, color, extrinsic)
-            print('#############################')
-            print(self.vol_dim)
-            print(self.vol_start)
-            print(self.voxel[0])
-            print(self.mu)
-            print(self.intrinsic)
-            print(self.intrinsic_inv)
+            # print(np.count_nonzero(self.tsdf_wt))
+            tsdf_cuda.tsdf_update(self.tsdf_diff, self.tsdf_color, self.tsdf_wt, self.vol_dim, self.vol_start, self.voxel[0],
+                                  self.mu, self.intrinsic, depth, color, np.matmul(extrinsic, self.init_extrinsic_inv), depth.shape[1], depth.shape[0])
+            # print(np.count_nonzero(self.tsdf_wt))
+            #print('#############################')
+            #print(self.vol_dim)
+            #print(self.vol_start)
+            #print(self.voxel[0])
+            #print(self.mu)
+            #print(self.intrinsic)
+            #print(self.intrinsic_inv)
 
             # j, i = np.meshgrid(np.arange(self.tex_dim), np.arange(self.tex_dim))
             # flattened_idx = i * self.tex_dim + j

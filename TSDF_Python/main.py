@@ -3,10 +3,10 @@ import cv2
 import glob
 import TSDF_Python.tsdf_utils as tsdf_utils
 from TSDF_Python.tsdf import TSDF
-import MaskRCNN.model as modellib
+# import MaskRCNN.model as modellib
 import os
-import MaskRCNN.coco as coco
-import MaskRCNN.visualize as visualize
+# import MaskRCNN.coco as coco
+# import MaskRCNN.visualize as visualize
 # the teddy bear class, use: class_names.index('teddy bear')
 class_names = ('BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                'bus', 'train', 'truck', 'boat', 'traffic light',
@@ -35,11 +35,11 @@ WRITE_PATH = "/Users/qq456cvb/Documents/tsdf-fusion/data/can/"
 READ_PATH = "/Users/qq456cvb/Documents/tsdf-fusion/data/rgbd-frames/"
 
 
-class InferenceConfig(coco.CocoConfig):
-    # Set batch size to 1 since we'll be running inference on
-    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
+# class InferenceConfig(coco.CocoConfig):
+#    # Set batch size to 1 since we'll be running inference on
+#    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+#    GPU_COUNT = 1
+#    IMAGES_PER_GPU = 1
 
 # def test():
 #     tsdf = TSDF([585, 585, 320, 240])
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     # np.savetxt(WRITE_PATH + "camera-intrinsics.txt", tsdf.intrinsic[:3, :3])
     dist = np.array([0.2312, -0.7849, -0.0033, -0.0001, 0.9172])
     begin = 68164
-    end = 68165
+    end = 68164.4
 
     # model = modellib.MaskRCNN(mode="inference", model_dir='./', config=InferenceConfig())
     #

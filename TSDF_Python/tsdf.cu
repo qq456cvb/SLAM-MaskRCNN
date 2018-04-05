@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cuda_runtime.h>
 #include <vector_functions.h>
+#include <thrust/device_vector.h>
 #include "helper_math.h"
 using namespace std;
 
@@ -36,7 +37,7 @@ uint16_t *depth, uint8_t *color, float *extrinsic2init, int width, int height)
     if (diff > miu) diff = miu;
 
     uint16_t weight = 1;
-    uint16_t vol_idx = vol_dim * vol_dim * vol_idx_x + vol_dim * vol_idx_y + vol_idx_z;
+    int vol_idx = vol_dim * vol_dim * vol_idx_x + vol_dim * vol_idx_y + vol_idx_z;
     tsdf_diff[vol_idx] = (tsdf_diff[vol_idx] * tsdf_wt[vol_idx] + weight * diff) / (tsdf_wt[vol_idx] + weight);
     for (int i = 0; i < 3; i++) {
         tsdf_color[vol_idx * 3 + i] = (tsdf_color[vol_idx * 3 + i] * tsdf_wt[vol_idx] + weight * color[img_idx * 3 + i]) / (tsdf_wt[vol_idx] + weight);
@@ -46,35 +47,58 @@ uint16_t *depth, uint8_t *color, float *extrinsic2init, int width, int height)
 }
 
 
-void tsdf(float *tsdf_diff, int *tsdf_color, int *tsdf_wt, 
-int vol_dim, float *vol_start, float voxel, float miu, float *intrinsic, float *intrinsic_inv,
-uint16_t *depth, uint8_t *color, float *extrinsic)
+void tsdf(float *tsdf_diff, int *tsdf_color, int *tsdf_wt,
+int vol_dim, float *vol_start, float voxel, float miu, float *intrinsic,
+uint16_t *depth, uint8_t *color, float *extrinsic2init, int width, int height)
 {
-  cout << vol_dim << endl;
-  for (int i = 0; i < 3; i++) {
-    cout << vol_start[i] << ", ";
-  }
-  cout << endl;
-  cout << voxel << endl;
-  cout << miu << endl;
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++)
-      cout << intrinsic[i * 4 + j] << ",";
-    cout << endl;
-  }
+//  cout << vol_dim << endl;
+//  for (int i = 0; i < 3; i++) {
+//    cout << vol_start[i] << ", ";
+//  }
+//  cout << endl;
+//  cout << voxel << endl;
+//  cout << miu << endl;
+//  for (int i = 0; i < 4; i++) {
+//    for (int j = 0; j < 4; j++)
+//      cout << intrinsic[i * 4 + j] << ",";
+//    cout << endl;
+//  }
+    thrust::device_vector<float> tsdf_diff_d(tsdf_diff, tsdf_diff + vol_dim * vol_dim * vol_dim);
+    thrust::device_vector<int> tsdf_color_d(tsdf_color, tsdf_color + 3 * vol_dim * vol_dim * vol_dim);
+    thrust::device_vector<int> tsdf_wt_d(tsdf_wt, tsdf_wt + vol_dim * vol_dim * vol_dim);
+    thrust::device_vector<float> vol_start_d(vol_start, vol_start + 3);
+    thrust::device_vector<float> intrinsic_d(intrinsic, intrinsic + 16);
+    thrust::device_vector<uint16_t> depth_d(depth, depth + width * height);
+    thrust::device_vector<uint8_t> color_d(color, color + 3 * width * height);
+    thrust::device_vector<float> extrinsic2init_d(extrinsic2init, extrinsic2init + 16);
+
+    tsdf_kernel<<<dim3(vol_dim / 8, vol_dim / 8, vol_dim / 8), dim3(8, 8, 8)>>> (
+    thrust::raw_pointer_cast(tsdf_diff_d.data()),
+    thrust::raw_pointer_cast(tsdf_color_d.data()),
+    thrust::raw_pointer_cast(tsdf_wt_d.data()),
+    vol_dim,
+    (float3*)thrust::raw_pointer_cast(vol_start_d.data()),
+    voxel,
+    miu,
+    thrust::raw_pointer_cast(intrinsic_d.data()),
+    thrust::raw_pointer_cast(depth_d.data()),
+    thrust::raw_pointer_cast(color_d.data()),
+    thrust::raw_pointer_cast(extrinsic2init_d.data()), width, height);
+
+    cudaMemcpy(tsdf_diff, thrust::raw_pointer_cast(tsdf_diff_d.data()), vol_dim * vol_dim * vol_dim * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(tsdf_wt, thrust::raw_pointer_cast(tsdf_wt_d.data()), vol_dim * vol_dim * vol_dim * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(tsdf_color, thrust::raw_pointer_cast(tsdf_color_d.data()), 3 * vol_dim * vol_dim * vol_dim * sizeof(int), cudaMemcpyDeviceToHost);
   // dim3 dimBlock(256, 1, 1);
   // dim3 dimGrid(ceil((double)num_elements / dimBlock.x));
   
   // kernel<<<dimGrid, dimBlock>>>
   //   (vec, scalar, num_elements);
 
-  // cudaError_t error = cudaGetLastError();
-  // if (error != cudaSuccess) {
-  //   std::stringstream strstr;
-  //   strstr << "run_kernel launch failed" << std::endl;
-  //   strstr << "dimBlock: " << dimBlock.x << ", " << dimBlock.y << std::endl;
-  //   strstr << "dimGrid: " << dimGrid.x << ", " << dimGrid.y << std::endl;
-  //   strstr << cudaGetErrorString(error);
-  //   throw strstr.str();
-  // }
+    cudaError_t error = cudaGetLastError();
+    if (error != cudaSuccess) {
+        std::stringstream strstr;
+        strstr << "run_kernel launch failed" << std::endl;
+        strstr << cudaGetErrorString(error);
+        throw strstr.str();
+    }
 }
