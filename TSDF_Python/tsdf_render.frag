@@ -2,6 +2,7 @@
 in vec2 vTexCoord;
 
 uniform sampler2D tsdf;
+uniform isampler2D tsdf_cnt;
 
 out vec4 frag_color;
 
@@ -12,7 +13,7 @@ uniform float vol_dim;
 uniform vec3 volStart;
 uniform vec3 volEnd;
 
-
+uniform vec3 random_colors[32];
 // vec3 texToPos(vec2 texCoord, vec2 texel, float tex_dim, float voxel)
 // {
 //     vec3 pos;
@@ -53,6 +54,25 @@ vec4 interpTsdf(vec3 pos, vec2 texel, float tex_dim, float voxel) {
     vec2 tex_lhh = indToTex(ind + vec3(0, 1, 1), texel, tex_dim);
     vec2 tex_hhh = indToTex(ind + vec3(1, 1, 1), texel, tex_dim);
     vec4 high = mix( mix(texture(tsdf, tex_llh), texture(tsdf, tex_hlh), interp.x),  mix(texture(tsdf, tex_lhh), texture(tsdf, tex_hhh), interp.x), interp.y);
+    return mix(low, high, interp.z);
+}
+
+vec4 interpTsdfCnt(vec3 pos, vec2 texel, float tex_dim, float voxel) {
+//    pos += 0.00001f;
+    vec3 ind = (pos - volStart) / voxel;
+    vec3 interp = fract(ind);
+    ind = floor(ind);
+    vec2 tex_lll = indToTex(ind, texel, tex_dim);
+    vec2 tex_hll = indToTex(ind + vec3(1, 0, 0), texel, tex_dim);
+    vec2 tex_lhl = indToTex(ind + vec3(0, 1, 0), texel, tex_dim);
+    vec2 tex_hhl = indToTex(ind + vec3(1, 1, 0), texel, tex_dim);
+    vec4 low = mix( mix(texture(tsdf_cnt, tex_lll), texture(tsdf_cnt, tex_hll), interp.x),  mix(texture(tsdf_cnt, tex_lhl), texture(tsdf_cnt, tex_hhl), interp.x), interp.y);
+
+    vec2 tex_llh = indToTex(ind + vec3(0, 0, 1), texel, tex_dim);
+    vec2 tex_hlh = indToTex(ind + vec3(1, 0, 1), texel, tex_dim);
+    vec2 tex_lhh = indToTex(ind + vec3(0, 1, 1), texel, tex_dim);
+    vec2 tex_hhh = indToTex(ind + vec3(1, 1, 1), texel, tex_dim);
+    vec4 high = mix( mix(texture(tsdf_cnt, tex_llh), texture(tsdf_cnt, tex_hlh), interp.x),  mix(texture(tsdf_cnt, tex_lhh), texture(tsdf_cnt, tex_hhh), interp.x), interp.y);
     return mix(low, high, interp.z);
 }
 
@@ -105,7 +125,8 @@ void main(void)
         if(f_tt < 0.0){                               // got it, calculate accurate intersection
             t = t + stepsize * f_tt / (f_t - f_tt);
             vec3 pt = c + t * d;
-            color.rgb = interpTsdf(pt, texel, tex_dim, voxel).bgr;
+            // color.rgb = interpTsdf(pt, texel, tex_dim, voxel).rgb;
+            color.rgb = random_colors[int(round(interpTsdfCnt(pt, texel, tex_dim, voxel).r))].rgb;
             // color = vec4(0, 0, 1, 1);
         }
 

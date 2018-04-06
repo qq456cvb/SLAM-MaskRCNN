@@ -14,11 +14,13 @@ class Viewer:
         }
         self.uniform_locs = {
             "tsdf": -1,
+            "tsdf_cnt": -1,
             "s2w": -1,
             "c": -1,
             "vol_dim": -1,
             "volStart": -1,
-            "volEnd": -1
+            "volEnd": -1,
+            "random_colors": -1
         }
         vert_prog = shaders.compileShader(open('tsdf_render.vert').read(), gl.GL_VERTEX_SHADER)
         if not gl.glGetShaderiv(vert_prog, gl.GL_COMPILE_STATUS):
@@ -65,6 +67,10 @@ class Viewer:
 
         gl.glUseProgram(self.program)
         gl.glUniform1i(self.uniform_locs['tsdf'], 0)
+        gl.glUniform1i(self.uniform_locs['tsdf_cnt'], 1)
+
+        rand_colors = np.random.rand(32, 3)
+        gl.glUniform3fv(self.uniform_locs['random_colors'], 32, rand_colors.astype(np.float32))
 
     def set_s2w(self, mat):
         gl.glUseProgram(self.program)

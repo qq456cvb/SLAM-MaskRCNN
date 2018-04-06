@@ -3,9 +3,9 @@ import cv2
 import glob
 import TSDF_Python.tsdf_utils as tsdf_utils
 from TSDF_Python.tsdf import TSDF
-# import MaskRCNN.model as modellib
+#import MaskRCNN.model as modellib
 import os
-# import MaskRCNN.coco as coco
+#import MaskRCNN.coco as coco
 # import MaskRCNN.visualize as visualize
 # the teddy bear class, use: class_names.index('teddy bear')
 class_names = ('BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
@@ -35,11 +35,11 @@ WRITE_PATH = "/Users/qq456cvb/Documents/tsdf-fusion/data/can/"
 READ_PATH = "/Users/qq456cvb/Documents/tsdf-fusion/data/rgbd-frames/"
 
 
-# class InferenceConfig(coco.CocoConfig):
-#    # Set batch size to 1 since we'll be running inference on
-#    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-#    GPU_COUNT = 1
-#    IMAGES_PER_GPU = 1
+#class InferenceConfig(coco.CocoConfig):
+   # Set batch size to 1 since we'll be running inference on
+   # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+ #  GPU_COUNT = 1
+ #  IMAGES_PER_GPU = 1
 
 # def test():
 #     tsdf = TSDF([585, 585, 320, 240])
@@ -73,11 +73,11 @@ if __name__ == '__main__':
     # np.savetxt(WRITE_PATH + "camera-intrinsics.txt", tsdf.intrinsic[:3, :3])
     dist = np.array([0.2312, -0.7849, -0.0033, -0.0001, 0.9172])
     begin = 68164
-    end = 68164.4
+    end = 68164.37
 
     # model = modellib.MaskRCNN(mode="inference", model_dir='./', config=InferenceConfig())
-    #
-    # # Load weights trained on MS-COCO
+
+    # Load weights trained on MS-COCO
     # model.load_weights("../mask_rcnn_coco.h5", by_name=True)
 
     for i in range(3000):
@@ -93,11 +93,12 @@ if __name__ == '__main__':
         # mask_img = cv2.imread(mask_fn[j], cv2.IMREAD_GRAYSCALE)
         rgb_img = cv2.imread(rgb_fn[j])
         rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
-        # result = model.detect([rgb_img], verbose=0)[0]
+        #result = model.detect([rgb_img], verbose=0)[0]
         # visualize.display_instances(rgb_img, result['rois'], result['masks'], result['class_ids'],
         #                     class_names, result['scores'])
-        # masks = result['masks']
-        # for k in range(masks.shape[2]):
+        #masks = result['masks']
+        #masks = masks.astype(np.bool)
+        masks = np.load('masks.npy')
         #     cv2.imshow('mask%d' % k, masks[:, :, k] * 255)
         #
         # # cv2.imshow('img', rgb_img)
@@ -135,7 +136,7 @@ if __name__ == '__main__':
 
         extrinsic = tsdf_utils.transform44(extrinsic)
         # write_file(depth_img, rgb_img, extrinsic, i)
-        tsdf.parse_frame(depth_img, rgb_img, extrinsic, mean_depth, None)
+        tsdf.parse_frame(depth_img, rgb_img, extrinsic, mean_depth, masks)
 
     tsdf_utils.show_model(tsdf)
 

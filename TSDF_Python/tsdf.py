@@ -15,6 +15,7 @@ class TSDF:
         self.tsdf_diff = None
         self.tsdf_wt = None
         self.tsdf_color = None
+        self.tsdf_cls = None
         self.tsdf_cls_cnt = None
         self.mu = 0
         self.vol_dim = 256
@@ -47,6 +48,8 @@ class TSDF:
         self.tsdf_diff = np.ones([self.tex_dim, self.tex_dim], np.float32) * self.mu
         self.tsdf_wt = np.zeros([self.tex_dim, self.tex_dim], np.int32)
         self.tsdf_color = np.zeros([self.tex_dim, self.tex_dim, 3], np.int32)
+        self.tsdf_cls = np.zeros([self.tex_dim, self.tex_dim], np.int32)
+        self.tsdf_cls_cnt = np.zeros([self.tex_dim, self.tex_dim], np.int32)
 
     def parse_frame(self, depth, color, extrinsic, mean_depth, masks):
         if not self.init:
@@ -54,8 +57,12 @@ class TSDF:
             self.parse_frame(depth, color, extrinsic, mean_depth, masks)
         else:
             # print(np.count_nonzero(self.tsdf_wt))
-            tsdf_cuda.tsdf_update(self.tsdf_diff, self.tsdf_color, self.tsdf_wt, self.vol_dim, self.vol_start, self.voxel[0],
-                                  self.mu, self.intrinsic, depth, color, np.matmul(extrinsic, self.init_extrinsic_inv), depth.shape[1], depth.shape[0])
+            self.num_cls = masks.shape[-1]
+            cls = np.zeros([depth.shape[0], depth.shape[1]], np.int32)
+            for i in range(self.num_cls):
+                cls[masks[:, :, i]] = i + 1
+            tsdf_cuda.tsdf_update(self.tsdf_diff, self.tsdf_color, self.tsdf_wt, self.tsdf_cls, self.tsdf_cls_cnt, self.vol_dim, self.vol_start, self.voxel[0],
+                                  self.mu, self.intrinsic, depth, color, cls, np.matmul(extrinsic, self.init_extrinsic_inv), depth.shape[1], depth.shape[0])
             # print(np.count_nonzero(self.tsdf_wt))
             #print('#############################')
             #print(self.vol_dim)

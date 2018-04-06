@@ -136,8 +136,8 @@ def show_model(tsdf):
     viewer.set_vol_start(tsdf.vol_start)
     viewer.set_vol_end(tsdf.vol_end)
 
-    tex = gl.glGenTextures(1)
-    gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
+    tex = gl.glGenTextures(2)
+    gl.glBindTexture(gl.GL_TEXTURE_2D, tex[0])
 
     # print(tsdf.tsdf_color.dtype)
     fused = np.concatenate([tsdf.tsdf_color.astype(np.float32) / 255, np.expand_dims(tsdf.tsdf_diff, -1)], axis=-1)
@@ -145,6 +145,13 @@ def show_model(tsdf):
     gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
     gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, fused.shape[1], fused.shape[0], 0, gl.GL_RGBA, gl.GL_FLOAT, fused)
+    gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+
+    gl.glBindTexture(gl.GL_TEXTURE_2D, tex[1])
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_R16I, tsdf.tsdf_cls.shape[1], tsdf.tsdf_cls.shape[0], 0, gl.GL_RED_INTEGER, gl.GL_INT,
+                    tsdf.tsdf_cls)
     gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
     running = True
@@ -177,8 +184,13 @@ def show_model(tsdf):
 
         gl.glBindVertexArray(viewer.vao)
 
-        gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
+        gl.glActiveTexture(gl.GL_TEXTURE0)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, tex[0])
+
+        gl.glActiveTexture(gl.GL_TEXTURE1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, tex[1])
+
         gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+        # gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
         gl.glUseProgram(0)
         sdl2.SDL_GL_SwapWindow(window)
