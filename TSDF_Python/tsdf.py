@@ -4,7 +4,7 @@ import sys
 
 sys.path.append('./build/Release')
 
-import tsdf_cuda
+# import tsdf_cuda
 
 
 class TSDF:
@@ -58,11 +58,14 @@ class TSDF:
         else:
             # print(np.count_nonzero(self.tsdf_wt))
             self.num_cls = masks.shape[-1]
-            cls = np.zeros([depth.shape[0], depth.shape[1]], np.int32)
-            for i in range(self.num_cls):
-                cls[masks[:, :, i]] = i + 1
+            print(self.intrinsic)
+            print(np.matmul(extrinsic, self.init_extrinsic_inv))
             tsdf_cuda.tsdf_update(self.tsdf_diff, self.tsdf_color, self.tsdf_wt, self.tsdf_cls, self.tsdf_cls_cnt, self.vol_dim, self.vol_start, self.voxel[0],
-                                  self.mu, self.intrinsic, depth, color, cls, np.matmul(extrinsic, self.init_extrinsic_inv), depth.shape[1], depth.shape[0])
+                                  self.mu, self.intrinsic, depth, color, masks, np.matmul(extrinsic, self.init_extrinsic_inv), depth.shape[1], depth.shape[0])
+            test = self.tsdf_color[::8, ::8, :].astype(np.uint8)
+            # test = cv2.resize(self.tsdf_diff, (512, 512))
+            cv2.imshow("test", test)
+            cv2.waitKey(0)
             # print(np.count_nonzero(self.tsdf_wt))
             #print('#############################')
             #print(self.vol_dim)

@@ -1,9 +1,11 @@
 import os
-# from MaskRCNN import coco
-# import MaskRCNN.model as modellib
+from MaskRCNN import coco
+import MaskRCNN.model as modellib
 import cv2
 import utils
 from matplotlib import pyplot as plt
+from TSDF_Python.main import RGB_PATH, ROOT_PATH, OBJ
+import glob
 
 # from MaskRCNN import visualize
 import numpy as np
@@ -38,28 +40,55 @@ class_names = ('BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
                'teddy bear', 'hair drier', 'toothbrush')
 
-#
-# class InferenceConfig(coco.CocoConfig):
-#     # Set batch size to 1 since we'll be running inference on
-#     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-#     GPU_COUNT = 1
-#     IMAGES_PER_GPU = 1
+
+class InferenceConfig(coco.CocoConfig):
+    # Set batch size to 1 since we'll be running inference on
+    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
 
 
-if __name__ == '__main__':
+def get_mask():
+    def preserve_small_objs(masks):
+        areas = np.array([np.count_nonzero(masks[:, :, i]) for i in range(masks.shape[-1])])
+        sorted_idx = np.argsort(areas)
+        for i in range(len(sorted_idx)):
+            for j in range(i + 1, len(sorted_idx)):
+                if np.any(masks[:, :, i] & masks[:, :, j]):
+                    masks[:, :, j][masks[:, :, i] & masks[:, :, j]] = False
+        return masks
 
-    # config = InferenceConfig()
-    #
-    # # Create model object in inference mode.
-    # model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
-    #
-    # # Load weights trained on MS-COCO
-    # model.load_weights(COCO_MODEL_PATH, by_name=True)
-    #
+    config = InferenceConfig()
+
+    # Create model object in inference mode.
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+
+    # Load weights trained on MS-COCO
+    model.load_weights(COCO_MODEL_PATH, by_name=True)
+
+    rgb_fn = sorted(glob.glob(RGB_PATH))
+    for fn in rgb_fn:
+        rgb_img = cv2.imread(fn)
+        rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
+        result = model.detect([rgb_img], verbose=0)[0]
+        masks = result['masks']
+        masks = masks.astype(np.bool)
+        masks = preserve_small_objs(masks)
+        cls = np.zeros([rgb_img.shape[0], rgb_img.shape[1]], np.uint8)
+        for i in range(masks.shape[2]):
+            cls[masks[:, :, i]] = i + 1
+        print('processing: {}'.format(fn))
+        write_path = os.path.join(ROOT_PATH, OBJ, "mask\\" + fn.split('\\')[-1])
+        cv2.imshow('test', cls * 20)
+        cv2.waitKey(10)
+        cv2.imwrite(write_path, cls)
+
+
+def slam():
     intrinsic = np.array([[520, 0, 360, 0],
-                         [0, 520, 270, 0],
-                         [0, 0, 1, 0],
-                         [0, 0, 0, 1]])
+                          [0, 520, 270, 0],
+                          [0, 0, 1, 0],
+                          [0, 0, 0, 1]])
     intrinsic = intrinsic[:3, :3]
 
     cap = cv2.VideoCapture('seq1.mp4')
@@ -143,7 +172,6 @@ if __name__ == '__main__':
     # print(pts1.shape)
     # print(np.sum(np.diag(abs(np.matmul(np.matmul(np.hstack([pts2, np.ones([pts2.shape[0], 1])]), fund_mat),  np.hstack([pts1, np.ones([pts1.shape[0], 1])]).transpose())))))
 
-
     # cv2.drawKeypoints(img1, pts1, img1)
     # plt.imshow(img1)
     # plt.imshow(img2)
@@ -156,5 +184,12 @@ if __name__ == '__main__':
     #     print(r)
     #     visualize.display_instances(img, r['rois'], r['masks'], r['class_ids'],
     #                                 class_names, r['scores'], figsize=(6, 8))
+
+
+if __name__ == '__main__':
+
+    get_mask()
+
+
 
 

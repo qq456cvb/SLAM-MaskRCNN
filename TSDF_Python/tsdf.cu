@@ -35,10 +35,12 @@ uint16_t *depth, uint8_t *color, int *cls, float *extrinsic2init, int width, int
     float diff = depth[img_idx] / 5000.f - ((float*)&proj)[2];
     if (diff <= -miu) return;
     if (diff > miu) diff = miu;
+    diff /= miu;
 
     uint16_t weight = 1;
     int vol_idx = vol_dim * vol_dim * vol_idx_x + vol_dim * vol_idx_y + vol_idx_z;
     tsdf_diff[vol_idx] = (tsdf_diff[vol_idx] * tsdf_wt[vol_idx] + weight * diff) / (tsdf_wt[vol_idx] + weight);
+
     for (int i = 0; i < 3; i++) {
         tsdf_color[vol_idx * 3 + i] = (tsdf_color[vol_idx * 3 + i] * tsdf_wt[vol_idx] + weight * color[img_idx * 3 + i]) / (tsdf_wt[vol_idx] + weight);
     }

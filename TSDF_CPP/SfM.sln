@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.27004.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SfM", "SfM.vcxproj", "{07F85257-CFB4-4660-AA62-1A34AC5AAA6C}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SfM_CUDA", "..\SfM_CUDA\SfM_CUDA.vcxproj", "{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,12 @@ Global
 		{07F85257-CFB4-4660-AA62-1A34AC5AAA6C}.Release|x64.Build.0 = Release|x64
 		{07F85257-CFB4-4660-AA62-1A34AC5AAA6C}.Release|x86.ActiveCfg = Release|Win32
 		{07F85257-CFB4-4660-AA62-1A34AC5AAA6C}.Release|x86.Build.0 = Release|Win32
+		{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}.Debug|x64.ActiveCfg = Debug|x64
+		{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}.Debug|x64.Build.0 = Debug|x64
+		{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}.Debug|x86.ActiveCfg = Debug|x64
+		{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}.Release|x64.ActiveCfg = Release|x64
+		{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}.Release|x64.Build.0 = Release|x64
+		{410D8ABE-6E63-4CF8-8A54-9E45E5890CC0}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

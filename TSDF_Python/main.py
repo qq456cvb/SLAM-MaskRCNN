@@ -98,7 +98,10 @@ if __name__ == '__main__':
         #                     class_names, result['scores'])
         #masks = result['masks']
         #masks = masks.astype(np.bool)
-        masks = np.load('masks.npy')
+        masks = cv2.imread(mask_fn[j])
+        # print(masks.shape)
+        # cv2.imshow('test', masks)
+        # cv2.waitKey(0)
         #     cv2.imshow('mask%d' % k, masks[:, :, k] * 255)
         #
         # # cv2.imshow('img', rgb_img)
@@ -134,7 +137,7 @@ if __name__ == '__main__':
 
             break
 
-        extrinsic = tsdf_utils.transform44(extrinsic)
+        extrinsic = tsdf_utils.parse_pos(extrinsic)
         # write_file(depth_img, rgb_img, extrinsic, i)
         tsdf.parse_frame(depth_img, rgb_img, extrinsic, mean_depth, masks)
 

@@ -184,10 +184,10 @@ int main()
 {
 	cv::Scalar intrinsics{ 520.9, 521.0, 325.1, 249.7 };
 	auto tsdf = std::make_shared<TSDF>(intrinsics);
-	cv::String rgb_path("D://rgb-datasets//cokecan//rgb//*.png"); //select only png
-	cv::String depth_path("D://rgb-datasets//cokecan//depth//*.png");
-	cv::String mask_path("D://rgb-datasets//cokecan//gray_mask//*.png");
-	auto traj = read_trajactory("D://rgb-datasets//cokecan//groundtruth.txt");
+	cv::String rgb_path("D://rgb-datasets//desk//rgb//*.png"); //select only png
+	cv::String depth_path("D://rgb-datasets//desk//depth//*.png");
+	cv::String mask_path("D://rgb-datasets//desk//mask//*.png");
+	auto traj = read_trajactory("D://rgb-datasets//desk//groundtruth.txt");
 	vector<cv::String> rgb_fn, depth_fn, mask_fn;
 	cv::glob(rgb_path, rgb_fn, false);
 	cv::glob(depth_path, depth_fn, false);
@@ -208,20 +208,20 @@ int main()
 		auto depth_img = cv::imread(depth_fn[i], CV_LOAD_IMAGE_ANYDEPTH);
 		auto mask_img = cv::imread(mask_fn[j], CV_LOAD_IMAGE_GRAYSCALE);
 		auto rgb_img = cv::imread(rgb_fn[j]);
-		uint16_t *depth_ptr = (uint16_t *)depth_img.data;
-		uint8_t *mask_ptr = (uint8_t *)mask_img.data;
-		cv::Vec3b *rgb_img_ptr = (cv::Vec3b *)rgb_img.data;
-		for (int j = 0; j < depth_img.rows; j++)
+		//uint16_t *depth_ptr = (uint16_t *)depth_img.data;
+		//uint8_t *mask_ptr = (uint8_t *)mask_img.data;
+		//cv::Vec3b *rgb_img_ptr = (cv::Vec3b *)rgb_img.data;
+		/*for (int j = 0; j < depth_img.rows; j++)
 		{
 			for (int k = 0; k < depth_img.cols; k++)
 			{
 				auto idx = j * depth_img.cols + k;
 				depth_ptr[idx] = depth_ptr[idx] * (mask_ptr[idx] > 0 ? 1 : 0);
-				//cv::multiply(cv::Scalar(mask_ptr[idx] > 0 ? 1 : 0), rgb_img_ptr[idx], rgb_img_ptr[idx]);
 			}
-		}
-		double mean;
-		filter_gaussian(depth_img, mean);
+		}*/
+		/*double mean;
+		filter_gaussian(depth_img, mean);*/
+
 		auto low = traj.lower_bound(depth_timestamps[i]);
 		auto extrinsic = parse_pos(low->second);
 		tsdf->parse_frame(depth_img, rgb_img, extrinsic, mean);

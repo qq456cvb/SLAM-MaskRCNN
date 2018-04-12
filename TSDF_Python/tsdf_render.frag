@@ -125,8 +125,8 @@ void main(void)
         if(f_tt < 0.0){                               // got it, calculate accurate intersection
             t = t + stepsize * f_tt / (f_t - f_tt);
             vec3 pt = c + t * d;
-            // color.rgb = interpTsdf(pt, texel, tex_dim, voxel).rgb;
-            color.rgb = random_colors[int(round(interpTsdfCnt(pt, texel, tex_dim, voxel).r))].rgb;
+             color.rgb = interpTsdf(pt, texel, tex_dim, voxel).rgb;
+//            color.rgb = random_colors[int(round(interpTsdfCnt(pt, texel, tex_dim, voxel).r))].rgb;
             // color = vec4(0, 0, 1, 1);
         }
 
