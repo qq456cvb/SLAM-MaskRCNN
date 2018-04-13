@@ -54,8 +54,8 @@ def get_mask():
         sorted_idx = np.argsort(areas)
         for i in range(len(sorted_idx)):
             for j in range(i + 1, len(sorted_idx)):
-                if np.any(masks[:, :, i] & masks[:, :, j]):
-                    masks[:, :, j][masks[:, :, i] & masks[:, :, j]] = False
+                if np.any(masks[:, :, sorted_idx[i]] & masks[:, :, sorted_idx[j]]):
+                    masks[:, :, sorted_idx[j]][masks[:, :, sorted_idx[i]] & masks[:, :, sorted_idx[j]]] = False
         return masks
 
     config = InferenceConfig()
