@@ -1,5 +1,7 @@
 #include "utils.cuh"
 #include <sstream>
+#include "helper_math.h"
+#include "tsdf.cuh"
 
 // parse camera position to projection matrix
 cv::Mat parse_extrinsic(const std::vector<double>& list) {
@@ -86,3 +88,84 @@ float mean_depth(const cv::Mat& depth) {
 	}
 	return static_cast<float>(sum / total);
 }
+
+template <typename T>
+__device__ T mix(T a, T b, float interp) {
+	return (1 - interp) * a + interp * b;
+}
+
+
+__device__ float interp_tsdf_diff(const float3& pos, const float3& vol_start, const float3& voxel, const int3& vol_dim, float *tsdf_diff) {
+	float3 idx = (pos - vol_start) / voxel;
+	int3 floored_idx = make_int3(floorf(idx.x), floorf(idx.y), floorf(idx.z));
+	float3 frac_idx = idx - make_float3(floored_idx.x, floored_idx.y, floored_idx.z);
+	int base_idx = vol_dim.y * vol_dim.z * floored_idx.x + vol_dim.z * floored_idx.y + floored_idx.z;
+	float diffs[8];
+	for (uint8_t i = 0; i < 2; ++i)
+	{
+		for (uint8_t j = 0; j < 2; ++j)
+		{
+			for (uint8_t k = 0; k < 2; ++k)
+			{
+				int vol_idx = base_idx + vol_dim.y * vol_dim.z * i + vol_dim.z * j + k;
+				diffs[i * 4 + j * 2 + k] = tsdf_diff[vol_idx];
+			}
+		}
+	}
+	float low = mix(mix(diffs[0], diffs[4], frac_idx.x), mix(diffs[2], diffs[6], frac_idx.x), frac_idx.y);
+	float high = mix(mix(diffs[1], diffs[5], frac_idx.x), mix(diffs[3], diffs[7], frac_idx.x), frac_idx.y);
+	return mix(low, high, frac_idx.z);
+}
+
+__device__ uchar3 interp_tsdf_color(const float3& pos, const float3& vol_start, const float3& voxel, const int3& vol_dim, uchar3 *tsdf_color) {
+	float3 idx = (pos - vol_start) / voxel;
+	int3 floored_idx = make_int3(floorf(idx.x), floorf(idx.y), floorf(idx.z));
+	float3 frac_idx = idx - make_float3(floored_idx.x, floored_idx.y, floored_idx.z);
+	int base_idx = vol_dim.y * vol_dim.z * floored_idx.x + vol_dim.z * floored_idx.y + floored_idx.z;
+	float3 colors[8];
+	for (uint8_t i = 0; i < 2; ++i)
+	{
+		for (uint8_t j = 0; j < 2; ++j)
+		{
+			for (uint8_t k = 0; k < 2; ++k)
+			{
+				int vol_idx = base_idx + vol_dim.y * vol_dim.z * i + vol_dim.z * j + k;
+				colors[i * 4 + j * 2 + k] = make_float3(tsdf_color[vol_idx].x, tsdf_color[vol_idx].y, tsdf_color[vol_idx].z);
+			}
+		}
+	}
+	float3 low = mix(mix(colors[0], colors[4], frac_idx.x), mix(colors[2], colors[6], frac_idx.x), frac_idx.y);
+	float3 high = mix(mix(colors[1], colors[5], frac_idx.x), mix(colors[3], colors[7], frac_idx.x), frac_idx.y);
+	float3 res = mix(low, high, frac_idx.z);
+	return make_uchar3(res.x, res.y, res.z);
+}
+
+__device__ void interp_tsdf_cnt(const float3& pos, const float3& vol_start, const float3& voxel, const int3& vol_dim, uint32_t *tsdf_cnt, float *out) {
+	float3 idx = (pos - vol_start) / voxel;
+	int3 floored_idx = make_int3(floorf(idx.x), floorf(idx.y), floorf(idx.z));
+	float3 frac_idx = idx - make_float3(floored_idx.x, floored_idx.y, floored_idx.z);
+	int base_idx = vol_dim.y * vol_dim.z * floored_idx.x + vol_dim.z * floored_idx.y + floored_idx.z;
+
+	for (uint8_t m = 0; m < MAX_OBJECTS / 4; ++m)
+	{
+		float4 diffs[8];
+		for (uint8_t i = 0; i < 2; ++i)
+		{
+			for (uint8_t j = 0; j < 2; ++j)
+			{
+				for (uint8_t k = 0; k < 2; ++k)
+				{
+					int vol_idx = base_idx + vol_dim.y * vol_dim.z * i + vol_dim.z * j + k;
+					uint4 tmp = *(uint4*)&tsdf_cnt[vol_idx * MAX_OBJECTS + m * 4];
+					diffs[i * 4 + j * 2 + k] = make_float4(tmp.x, tmp.y, tmp.z, tmp.w);
+				}
+			}
+		}
+		float4 low = mix(mix(diffs[0], diffs[4], frac_idx.x), mix(diffs[2], diffs[6], frac_idx.x), frac_idx.y);
+		float4 high = mix(mix(diffs[1], diffs[5], frac_idx.x), mix(diffs[3], diffs[7], frac_idx.x), frac_idx.y);
+		*(float4*)&out[m * 4] = mix(low, high, frac_idx.z);
+	}
+	return;
+}
+
+

@@ -140,8 +140,8 @@ int main()
 	});
 
 	double begin = 68164;
-	double end = 68164.37;
-	for (size_t i = 0; i < 100; i++) {
+	double end = 68170;
+	for (size_t i = 0; i < 10; i++) {
 		if (i >= depth_timestamps.size()) break;
 		if (depth_timestamps[i] < begin || depth_timestamps[i] > end) continue;
 		while (depth_timestamps[i] < mask_timestamps[j]) i++;
@@ -151,12 +151,14 @@ int main()
 		auto rgb_img = cv::imread(rgb_fn[j]);
 		//cv::cvtColor(rgb_img, rgb_img, cv::COLOR_BGR2RGB);
 
+		/*cv::imshow("mask", mask_img);
+		cv::waitKey();*/
+
 		auto mean = mean_depth(depth_img);
-		cout << type2str(depth_img.type()) << endl;
 
 		auto low = traj.lower_bound(depth_timestamps[i]);
 		auto extrinsic = parse_extrinsic(low->second);
-		tsdf->parse_frame(depth_img, rgb_img, extrinsic, mean);
+		tsdf->parse_frame(depth_img, rgb_img, mask_img, extrinsic, mean);
 	}
 	float angle = 0.f;
 	while (1) {
