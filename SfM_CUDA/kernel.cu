@@ -141,7 +141,8 @@ int main()
 
 	double begin = 68164;
 	double end = 68170;
-	for (size_t i = 0; i < 10; i++) {
+	Viewer *viewer = nullptr;
+	for (size_t i = 0; i < 30; i++) {
 		if (i >= depth_timestamps.size()) break;
 		if (depth_timestamps[i] < begin || depth_timestamps[i] > end) continue;
 		while (depth_timestamps[i] < mask_timestamps[j]) i++;
@@ -149,9 +150,23 @@ int main()
 		auto depth_img = cv::imread(depth_fn[i], CV_LOAD_IMAGE_ANYDEPTH);
 		auto mask_img = cv::imread(mask_fn[j], CV_LOAD_IMAGE_GRAYSCALE);
 		auto rgb_img = cv::imread(rgb_fn[j]);
+		std::cout << "processing: " << i << std::endl;
+		if (!viewer)
+		{
+			viewer = new Viewer(depth_img.cols, depth_img.rows);
+		}
 		//cv::cvtColor(rgb_img, rgb_img, cv::COLOR_BGR2RGB);
 
-		/*cv::imshow("mask", mask_img);
+		/*cv::Mat obj_img(mask_img.rows, mask_img.cols, CV_8UC1, cv::Scalar(0));
+		auto mask_ptr = mask_img.data;
+		for (int k = 0; k < mask_img.rows * mask_img.cols; k++)
+		{
+			if (mask_ptr[k] == 9)
+			{
+				obj_img.data[k] = 255;
+			}
+		}
+		cv::imshow("mask", obj_img);
 		cv::waitKey();*/
 
 		auto mean = mean_depth(depth_img);
@@ -160,11 +175,14 @@ int main()
 		auto extrinsic = parse_extrinsic(low->second);
 		tsdf->parse_frame(depth_img, rgb_img, mask_img, extrinsic, mean);
 	}
-	float angle = 0.f;
-	while (1) {
-		angle += 0.01f;
-		show_tsdf(*tsdf, 800, 600, angle, tsdf->mean_depth_);
+	if (viewer) {
+		float angle = 0.f;
+		while (1) {
+			angle += 0.01f;
+			viewer->show_tsdf(*tsdf, angle, tsdf->mean_depth_);
+		}
 	}
 	
+	delete viewer;
 	return 0;
 }

@@ -42,7 +42,8 @@ __global__ void show_tsdf_kernel(float *s2w, float3 *c, float3 *vol_start, float
 	tfar = min(tfar, 100.f);
 	if (tnear > tfar) return;
 
-	float t = tnear;
+	float t = tnear + 1e-6f;
+	tfar -= 1e-6f;
 	float f_tt = 0;
 	float stepsize = voxel[0].x;
 	float f_t = interp_tsdf_diff(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_diff);
@@ -63,8 +64,8 @@ __global__ void show_tsdf_kernel(float *s2w, float3 *c, float3 *vol_start, float
 		if (f_tt < 0.f)
 		{
 			t += stepsize * f_tt / (f_t - f_tt);
-			//output[(idx_y * width + idx_x)] = interp_tsdf_color(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_color);
-			float cnts[MAX_OBJECTS];
+			output[(idx_y * width + idx_x)] = interp_tsdf_color(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_color);
+			/*float cnts[MAX_OBJECTS];
 			interp_tsdf_cnt(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_cnt, cnts);
 			float max_cnt = 0;
 			uint8_t obj_idx = 0;
@@ -75,14 +76,25 @@ __global__ void show_tsdf_kernel(float *s2w, float3 *c, float3 *vol_start, float
 					obj_idx = k;
 				}
 			}
-			output[(idx_y * width + idx_x)] = make_uchar3(obj_idx * 20, obj_idx * 20, obj_idx * 20);
+			output[(idx_y * width + idx_x)] = make_uchar3(obj_idx * 20, obj_idx * 20, obj_idx * 20);*/
 		}
 	}
 }
 
+Viewer::Viewer(int width, int height) : width_(width), height_(height) {
+	cudaMalloc(&s2w_d, 16 * sizeof(float));
+	cudaMalloc(&c_d, 3 * sizeof(float));
+	cudaMalloc(&output_d, width * height * sizeof(uchar3));
+}
 
-cv::Mat show_tsdf(const TSDF& tsdf, int width, int height, float angle, float dist) {
-	cv::Mat img(height, width, CV_8UC3, cv::Scalar(0));
+Viewer::~Viewer() {
+	cudaFree(s2w_d);
+	cudaFree(c_d);
+	cudaFree(output_d);
+}
+
+cv::Mat Viewer::show_tsdf(const TSDF& tsdf, float angle, float dist) {
+	cv::Mat img(height_, width_, CV_8UC3, cv::Scalar(0));
 
 	float rot[16] = { std::cosf(angle), 0, -std::sinf(angle), dist * std::sinf(angle), 0, 1, 0, 0, std::sinf(angle), 0, std::cosf(angle), dist - dist * std::cosf(angle), 0, 0, 0, 1 };
 	cv::Mat extrinsic(4, 4, CV_32F, rot);
@@ -92,48 +104,27 @@ cv::Mat show_tsdf(const TSDF& tsdf, int width, int height, float angle, float di
 	center[0] = (dist + 0.5f) * std::sinf(angle);
 	center[2] = (dist + 0.5f) - (dist + 0.5f) * std::cosf(angle);
 
-	auto vol_dim = tsdf.get_dim();
-	int size = vol_dim[0] * vol_dim[1] * vol_dim[2];
+	cudaMemcpy(s2w_d, s2w.data, 16 * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(c_d, center, 3 * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemset(output_d, 0, width_ * height_ * sizeof(uchar3));
 
-	float *s2w_d = malloc_and_cpy((float*)s2w.data, 16);
-	float *c_d = malloc_and_cpy((float*)center, 3);
-	float *tsdf_diff_d = malloc_and_cpy((float*)tsdf.get_tsdf_diff(), size);
-	uchar3 *tsdf_color_d = malloc_and_cpy((uchar3*)tsdf.get_tsdf_color(), size);
-	uint32_t *tsdf_cnt_d = malloc_and_cpy((uint32_t*)tsdf.get_tsdf_cnt(), size * MAX_OBJECTS);
-	float *vol_start_d = malloc_and_cpy((float*)tsdf.get_vol_start().val, 3);
-	float *vol_end_d = malloc_and_cpy((float*)tsdf.get_vol_end().val, 3);
-	int *vol_dim_d = malloc_and_cpy((int*)vol_dim.val, 3);
-	float *voxel_d = malloc_and_cpy((float*)tsdf.get_voxel().val, 3);
-	uchar3 *output_d = malloc_and_cpy((uchar3*)img.data, width * height);
-
-	show_tsdf_kernel << <dim3((width - 1) / 32 + 1, (height - 1) / 32 + 1, 1), dim3(32, 32, 1) >> > (
+	show_tsdf_kernel << <dim3((width_ - 1) / 32 + 1, (height_ - 1) / 32 + 1, 1), dim3(32, 32, 1) >> > (
 		s2w_d,
 		(float3*)c_d,
-		(float3*)vol_start_d,
-		(float3*)vol_end_d,
-		(float3*)voxel_d,
-		(int3*)vol_dim_d,
-		tsdf_diff_d,
-		tsdf_color_d,
-		tsdf_cnt_d,
-		width,
-		height,
+		(float3*)tsdf.vol_start_d,
+		(float3*)tsdf.vol_end_d,
+		(float3*)tsdf.voxel_d,
+		(int3*)tsdf.vol_dim_d,
+		tsdf.tsdf_diff_d,
+		(uchar3*)tsdf.tsdf_color_d,
+		tsdf.tsdf_cnt_d,
+		width_,
+		height_,
 		output_d
 		);
-	cudaMemcpy(img.data, output_d, width * height * sizeof(uchar3), cudaMemcpyDeviceToHost);
+	cudaMemcpy(img.data, output_d, width_ * height_ * sizeof(uchar3), cudaMemcpyDeviceToHost);
 
-	cudaFree(s2w_d);
-	cudaFree(c_d);
-	cudaFree(vol_start_d);
-	cudaFree(vol_end_d);
-	cudaFree(voxel_d);
-	cudaFree(vol_dim_d);
-	cudaFree(tsdf_diff_d);
-	cudaFree(tsdf_color_d);
-	cudaFree(tsdf_cnt_d);
-	cudaFree(output_d);
-
-	cudaError_t error = cudaGetLastError();
+	auto error = cudaGetLastError();
 	if (error != cudaSuccess) {
 		std::stringstream strstr;
 		strstr << "run_kernel launch failed" << std::endl;
@@ -141,6 +132,6 @@ cv::Mat show_tsdf(const TSDF& tsdf, int width, int height, float angle, float di
 		throw strstr.str();
 	}
 	cv::imshow("img", img);
-	cv::waitKey();
+	cv::waitKey(10);
 	return img;
 }
