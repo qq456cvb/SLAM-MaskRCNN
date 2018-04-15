@@ -1,6 +1,11 @@
 import os
-from MaskRCNN import coco
-import MaskRCNN.model as modellib
+ROOT_DIR = os.path.abspath("Mask_RCNN/")
+sys.path.append(ROOT_DIR)
+sys.path.append(os.path.join(ROOT_DIR, "samples/coco/"))
+import mrcnn.utils
+import mrcnn.model as modellib
+import coco
+
 import cv2
 import utils
 from matplotlib import pyplot as plt
@@ -9,6 +14,18 @@ import glob
 
 # from MaskRCNN import visualize
 import numpy as np
+
+# import backend of keras to set GPU memory usage
+import tensorflow as tf
+import keras.backend.tensorflow_backend as ktf
+
+def get_session(gpu_fraction=0.333):
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction,
+                                allow_growth=True)
+    return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
+
+ktf.set_session(get_session())
 
 
 # Root directory of the project
