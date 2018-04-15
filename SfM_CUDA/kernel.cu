@@ -150,24 +150,25 @@ int main()
 		auto depth_img = cv::imread(depth_fn[i], CV_LOAD_IMAGE_ANYDEPTH);
 		auto mask_img = cv::imread(mask_fn[j], CV_LOAD_IMAGE_GRAYSCALE);
 		auto rgb_img = cv::imread(rgb_fn[j]);
-		std::cout << "processing: " << i << std::endl;
+		std::cout << "processing: " << i << ", " << rgb_fn[j] << std::endl;
 		if (!viewer)
 		{
 			viewer = new Viewer(depth_img.cols, depth_img.rows);
 		}
 		//cv::cvtColor(rgb_img, rgb_img, cv::COLOR_BGR2RGB);
 
-		/*cv::Mat obj_img(mask_img.rows, mask_img.cols, CV_8UC1, cv::Scalar(0));
+		// TODO: there are small noisy objects in mrcnn...
+		cv::Mat obj_img(mask_img.rows, mask_img.cols, CV_8UC1, cv::Scalar(0));
 		auto mask_ptr = mask_img.data;
 		for (int k = 0; k < mask_img.rows * mask_img.cols; k++)
 		{
-			if (mask_ptr[k] == 9)
+			if (mask_ptr[k] == 13)
 			{
 				obj_img.data[k] = 255;
 			}
 		}
 		cv::imshow("mask", obj_img);
-		cv::waitKey();*/
+		cv::waitKey();
 
 		auto mean = mean_depth(depth_img);
 

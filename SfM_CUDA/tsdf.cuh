@@ -55,6 +55,7 @@ private:
 	float *probs;
 	bool *box_mask;
 	bool init_ = false;
+	int num_objs = 0;
 
 	void init_cuda_vars(int width, int height);
 	void free_cuda_vars();
