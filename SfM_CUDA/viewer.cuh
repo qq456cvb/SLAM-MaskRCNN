@@ -6,6 +6,7 @@ public:
 	float *s2w_d;
 	float *c_d;
 	uchar3 *output_d;
+	uint8_t *random_colors_d;
 	int width_;
 	int height_;
 

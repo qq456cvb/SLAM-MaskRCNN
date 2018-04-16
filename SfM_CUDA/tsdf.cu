@@ -3,6 +3,7 @@
 #include <thrust/device_vector.h>
 #include "helper_math.h"
 #include "configuration.h"
+#include <unordered_map>
 #include <cuda_runtime.h>
 #include <vector_functions.h>
 
@@ -122,7 +123,7 @@ __global__ void back_proj_kernel(float *s2w, float3 *vol_start, float3 *vol_end,
 			interp_tsdf_cnt(t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_cnt, &probs[(idx_y * width + idx_x) * MAX_OBJECTS]);
 			for (int i = 0; i < MAX_OBJECTS; i++)
 			{
-				if (probs[(idx_y * width + idx_x) * MAX_OBJECTS + i] > 0.05f)
+				if (probs[(idx_y * width + idx_x) * MAX_OBJECTS + i] > 1e-6f)
 				{
 					box_mask[(idx_y * width + idx_x) * MAX_OBJECTS + i] = true;
 				}
@@ -303,7 +304,7 @@ void TSDF::filter_overlaps(float *probs, int width, int height, cv::Mat& mask, b
 		{
 			for (int j = 1; j < MAX_OBJECTS; j++)
 			{
-				assignments[mask_ptr[i]][j] += log(max(probs[i * MAX_OBJECTS + j], Configuration::prior_mrcnn_err_rate));
+				assignments[mask_ptr[i]][j] += log(max(probs[i * MAX_OBJECTS + j] / n_obs_, Configuration::prior_mrcnn_err_rate));
 				cnts[mask_ptr[i]][j]++;
 			}
 		}
@@ -314,23 +315,90 @@ void TSDF::filter_overlaps(float *probs, int width, int height, cv::Mat& mask, b
 				for (size_t m = 1; m < max_obj_now; m++)
 				{
 					if (mask_ptr[i] == m) continue;
-					assignments[m][n] += log(max(1.f - probs[i * MAX_OBJECTS + n], Configuration::prior_mrcnn_err_rate));
+					assignments[m][n] += log(max(1.f - probs[i * MAX_OBJECTS + n] / n_obs_, Configuration::prior_mrcnn_err_rate));
 					cnts[m][n]++;
 				}
 			}
 		}
 	}
+	std::unordered_map<uint8_t, uint8_t> assign_map, assign_map_rev;
+	std::unordered_map<uint8_t, float> assign_map_prob;
 	for (int i = 1; i < max_obj_now; i++)
 	{
+		int max_j = -1;
+		float max_prob = 0;
 		for (int j = 1; j < MAX_OBJECTS; j++)
 		{
 			float prob = ((cnts[i][j] == 0) ? 0 : exp(assignments[i][j] / cnts[i][j]));
-			if (prob > 0.3f)
+			if (prob > max_prob) {
+				max_j = j;
+				max_prob = prob;
+			}
+		}
+		if (max_prob > 3 * Configuration::prior_mrcnn_err_rate)
+		{
+			printf("current object %d assigned to previous object %d with prob %f\n", i, max_j, max_prob);
+			if (assign_map.find(max_j) == assign_map.end())
 			{
-				printf("current object %d assigned to previous object %d with prob %f\n", i, j, prob);
+				assign_map[max_j] = i;
+				assign_map_prob[max_j] = max_prob;
+			}
+			else {
+				if (assign_map_prob[max_j] < max_prob)
+				{
+					assign_map[max_j] = i;
+					assign_map_prob[max_j] = max_prob;
+				}
 			}
 		}
 	}
+	for (auto it : assign_map) {
+		assign_map_rev[it.second] = it.first;
+		std::cout << (int)it.first << ", " << (int)it.second << std::endl;
+	}
+	
+	std::unordered_map<uint8_t, uint8_t> extra_assign;
+	for (int i = 0; i < width * height; i++)
+	{
+		if (assign_map_rev.find(mask_ptr[i]) != assign_map_rev.end())
+		{
+			mask_ptr[i] = assign_map_rev[mask_ptr[i]];
+		}
+		else if (mask_ptr[i] > 0) {
+			if (extra_assign.find(mask_ptr[i]) == extra_assign.end())
+			{
+				extra_assign[mask_ptr[i]] = num_objs;
+				if (num_objs == 16)
+				{
+					std::cout << num_objs << ", " <<  (int)mask_ptr[i] << std::endl;
+				}
+				mask_ptr[i] = num_objs;
+				num_objs++;
+			}
+			else {
+				mask_ptr[i] = extra_assign[mask_ptr[i]];
+			}
+		}
+	}
+	/*int total = width * height;
+	cv::Mat test(height, width, CV_32FC1, cv::Scalar(0));
+	float *ptr = (float*)test.data;
+	for (int i = 0; i < total; i++)
+	{
+		ptr[i] = (mask_ptr[i] == 16) ? 1.f : 0.f;
+	}
+	cv::imshow("after", test);
+	cv::waitKey(0);*/
+	/*for (int i = 0; i < total; i++)
+	{
+		ptr[i] = (mask_ptr[i] == 2) ? 1.f : 0.f;
+	}
+	cv::imshow("after", test);
+	cv::waitKey();*/
+	printf("num objs %d\n", num_objs);
+	//cv::minMaxLoc(mask, nullptr, &max_double);
+	//max_obj_now = static_cast<int>(max_double) + 1;
+	//num_objs = max(num_objs, max_obj_now);
 }
 
 void TSDF::launch_kernel(const cv::Mat& depth, const cv::Mat& color, cv::Mat& masks, const cv::Mat& extrinsic2init) {
@@ -362,20 +430,12 @@ void TSDF::launch_kernel(const cv::Mat& depth, const cv::Mat& color, cv::Mat& ma
 			probs_d,
 			box_mask_d
 			);
-
+		
 		cudaMemcpy(probs, probs_d, MAX_OBJECTS * width * height * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(box_mask, box_mask_d, MAX_OBJECTS * width * height * sizeof(bool), cudaMemcpyDeviceToHost);
-		int total = width * height;
-		cv::Mat test(height, width, CV_32FC1, cv::Scalar(0));
-		float *ptr = (float*)test.data;
-		for (int i = 0; i < total; i++)
-		{
-			ptr[i] = (box_mask[i * MAX_OBJECTS + 13]) ? 1.f : 0.f;
-		}
-		cv::imshow("test", test);
-		cv::waitKey();
+		
 		filter_overlaps(probs, width, height, masks, box_mask);
-		int a = 0;
+		
 	}
 	else {
 		double max_double;

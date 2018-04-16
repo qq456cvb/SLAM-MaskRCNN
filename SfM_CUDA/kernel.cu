@@ -142,7 +142,7 @@ int main()
 	double begin = 68164;
 	double end = 68170;
 	Viewer *viewer = nullptr;
-	for (size_t i = 0; i < 30; i++) {
+	for (size_t i = 0; i < 20; i++) {
 		if (i >= depth_timestamps.size()) break;
 		if (depth_timestamps[i] < begin || depth_timestamps[i] > end) continue;
 		while (depth_timestamps[i] < mask_timestamps[j]) i++;
@@ -158,17 +158,17 @@ int main()
 		//cv::cvtColor(rgb_img, rgb_img, cv::COLOR_BGR2RGB);
 
 		// TODO: there are small noisy objects in mrcnn...
-		cv::Mat obj_img(mask_img.rows, mask_img.cols, CV_8UC1, cv::Scalar(0));
+		/*cv::Mat obj_img(mask_img.rows, mask_img.cols, CV_8UC1, cv::Scalar(0));
 		auto mask_ptr = mask_img.data;
 		for (int k = 0; k < mask_img.rows * mask_img.cols; k++)
 		{
-			if (mask_ptr[k] == 13)
+			if (mask_ptr[k] > 0)
 			{
 				obj_img.data[k] = 255;
 			}
 		}
 		cv::imshow("mask", obj_img);
-		cv::waitKey();
+		cv::waitKey(0);*/
 
 		auto mean = mean_depth(depth_img);
 

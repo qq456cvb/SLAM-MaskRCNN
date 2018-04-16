@@ -15,7 +15,7 @@ T* malloc_and_cpy(T *host_ptr, size_t cnt) {
 
 __global__ void show_tsdf_kernel(float *s2w, float3 *c, float3 *vol_start, float3 *vol_end, float3 *voxel,
 	int3 *vol_dim, float *tsdf_diff, uchar3 *tsdf_color, uint32_t *tsdf_cnt,
-	int width, int height, uchar3 *output)
+	int width, int height, uchar3 *output, uint8_t *random_colors)
 {
 	uint16_t idx_x = blockIdx.x * blockDim.x + threadIdx.x;
 	uint16_t idx_y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -64,9 +64,9 @@ __global__ void show_tsdf_kernel(float *s2w, float3 *c, float3 *vol_start, float
 		if (f_tt < 0.f)
 		{
 			t += stepsize * f_tt / (f_t - f_tt);
-			output[(idx_y * width + idx_x)] = interp_tsdf_color(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_color);
-			/*float cnts[MAX_OBJECTS];
-			interp_tsdf_cnt(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_cnt, cnts);
+			//output[(idx_y * width + idx_x)] = interp_tsdf_color(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_color);
+			float cnts[MAX_OBJECTS];
+			interp_tsdf_cnt(c[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_cnt, (float*)cnts);
 			float max_cnt = 0;
 			uint8_t obj_idx = 0;
 			for (uint8_t k = 0; k < MAX_OBJECTS; k++)
@@ -76,7 +76,10 @@ __global__ void show_tsdf_kernel(float *s2w, float3 *c, float3 *vol_start, float
 					obj_idx = k;
 				}
 			}
-			output[(idx_y * width + idx_x)] = make_uchar3(obj_idx * 20, obj_idx * 20, obj_idx * 20);*/
+			if (obj_idx > 0)
+			{
+				output[(idx_y * width + idx_x)] = make_uchar3(random_colors[obj_idx * 3 + 2], random_colors[obj_idx * 3 + 1], random_colors[obj_idx * 3]);
+			}
 		}
 	}
 }
@@ -85,12 +88,49 @@ Viewer::Viewer(int width, int height) : width_(width), height_(height) {
 	cudaMalloc(&s2w_d, 16 * sizeof(float));
 	cudaMalloc(&c_d, 3 * sizeof(float));
 	cudaMalloc(&output_d, width * height * sizeof(uchar3));
+	cudaMalloc(&random_colors_d, MAX_OBJECTS * 3 * sizeof(uint8_t));
+	uint8_t random_colors[MAX_OBJECTS * 3] = {
+		230, 25, 75,
+		60, 180, 75,
+		255, 225, 25,
+		0, 130, 200,
+		245, 130, 48,
+		145, 30, 180,
+		70, 240, 240,
+		240, 50, 230,
+		210, 245, 60,
+		250, 190, 190,
+		0, 128, 128,
+		230, 190, 255,
+		170, 110, 40,
+		255, 250, 200,
+		128, 0, 0,
+		170, 255, 195,
+		230, 25, 75,
+		60, 180, 75,
+		255, 225, 25,
+		0, 130, 200,
+		245, 130, 48,
+		145, 30, 180,
+		70, 240, 240,
+		240, 50, 230,
+		210, 245, 60,
+		250, 190, 190,
+		0, 128, 128,
+		230, 190, 255,
+		170, 110, 40,
+		255, 250, 200,
+		128, 0, 0,
+		170, 255, 195
+	};
+	cudaMemcpy(random_colors_d, (uint8_t*)random_colors, MAX_OBJECTS * 3 * sizeof(uint8_t), cudaMemcpyHostToDevice);
 }
 
 Viewer::~Viewer() {
 	cudaFree(s2w_d);
 	cudaFree(c_d);
 	cudaFree(output_d);
+	cudaFree(random_colors_d);
 }
 
 cv::Mat Viewer::show_tsdf(const TSDF& tsdf, float angle, float dist) {
@@ -120,7 +160,8 @@ cv::Mat Viewer::show_tsdf(const TSDF& tsdf, float angle, float dist) {
 		tsdf.tsdf_cnt_d,
 		width_,
 		height_,
-		output_d
+		output_d,
+		(uint8_t*)random_colors_d
 		);
 	cudaMemcpy(img.data, output_d, width_ * height_ * sizeof(uchar3), cudaMemcpyDeviceToHost);
 
