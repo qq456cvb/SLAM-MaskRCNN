@@ -1,17 +1,18 @@
 #include "utils.cuh"
 #include <sstream>
+#include <fstream>
 #include "helper_math.h"
 #include "tsdf.cuh"
 
 // parse camera position to projection matrix
 cv::Mat parse_extrinsic(const std::vector<double>& list) {
 	cv::Vec3d axis{ list[3], list[4], list[5] };
-	auto axis_norm = sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+	double axis_norm = sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
 	double theta = 2 * atan2(axis_norm, list[6]);
 	axis = axis / axis_norm;
 
 	cv::Mat rotation;
-	auto rod = theta * axis;
+	cv::Vec3d rod = theta * axis;
 	cv::Rodrigues(rod, rotation);
 
 	cv::Mat extrinsic = cv::Mat::eye(4, 4, CV_64F);
@@ -58,10 +59,10 @@ cv::Mat pack_tsdf_color(float* tsdf_ptr, uint8_t* color_ptr) {
 	return result;
 }
 
-std::map<double, std::vector<double>> read_trajactory(std::string filename) {
-	std::map<double, std::vector<double>> result;
+std::map<double, std::vector<double> > read_trajactory(std::string filename) {
+	std::map<double, std::vector<double> > result;
 	std::string line;
-	std::ifstream infile(filename);
+	std::ifstream infile(filename.c_str());
 	while (std::getline(infile, line))
 	{
 		std::istringstream iss(line);
@@ -75,7 +76,7 @@ std::map<double, std::vector<double>> read_trajactory(std::string filename) {
 
 float mean_depth(const cv::Mat& depth) {
 	int cnt = depth.rows * depth.cols;
-	auto ptr = (uint16_t*)depth.data;
+	uint16_t *ptr = (uint16_t*)depth.data;
 	double sum = 0;
 	int total = 0;
 	for (int i = 0; i < cnt; i++) {

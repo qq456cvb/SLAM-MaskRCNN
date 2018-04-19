@@ -1,6 +1,7 @@
 #include "viewer.cuh"
 #include <thrust/device_vector.h>
 #include "helper_math.h"
+#include "math.h"
 #include <cuda_runtime.h>
 #include <vector_functions.h>
 #include "utils.cuh"
@@ -136,13 +137,13 @@ Viewer::~Viewer() {
 cv::Mat Viewer::show_tsdf(const TSDF& tsdf, float angle, float dist) {
 	cv::Mat img(height_, width_, CV_8UC3, cv::Scalar(0));
 
-	float rot[16] = { std::cosf(angle), 0, -std::sinf(angle), dist * std::sinf(angle), 0, 1, 0, 0, std::sinf(angle), 0, std::cosf(angle), dist - dist * std::cosf(angle), 0, 0, 0, 1 };
+	float rot[16] = { cosf(angle), 0, -sinf(angle), dist * sinf(angle), 0, 1, 0, 0, sinf(angle), 0, cosf(angle), dist - dist * cosf(angle), 0, 0, 0, 1 };
 	cv::Mat extrinsic(4, 4, CV_32F, rot);
 	cv::Mat s2w = extrinsic * tsdf.get_intrinsic_inv();
 
 	float center[3] = { 0 };
-	center[0] = (dist + 0.5f) * std::sinf(angle);
-	center[2] = (dist + 0.5f) - (dist + 0.5f) * std::cosf(angle);
+	center[0] = (dist + 0.5f) * sinf(angle);
+	center[2] = (dist + 0.5f) - (dist + 0.5f) * cosf(angle);
 
 	cudaMemcpy(s2w_d, s2w.data, 16 * sizeof(float), cudaMemcpyHostToDevice);
 	cudaMemcpy(c_d, center, 3 * sizeof(float), cudaMemcpyHostToDevice);

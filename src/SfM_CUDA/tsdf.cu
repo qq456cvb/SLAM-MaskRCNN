@@ -194,7 +194,7 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, cv::Mat& mask
 		vol_end_ = cv::Vec3f((float*)center.data) + cv::Vec3f(half_side, half_side, half_side);
 		cv::divide(vol_end_ - vol_start_, vol_dim_ - cv::Vec3i(1, 1, 1), vol_res_);
 
-		miu_ = 5 * vol_res_;
+		miu_[0] = 5 * vol_res_[0];
 		auto size = vol_dim_[0] * vol_dim_[1] * vol_dim_[2];
 		tsdf_diff_ = new float[size] {};
 		for (int i = 0; i < size; ++i)

@@ -2,10 +2,9 @@
 #include "tsdf.cuh"
 #include "utils.cuh"
 #include <vector>
-#include <opencv2\opencv.hpp>
+#include <opencv2/opencv.hpp>
 #include <math.h>
 #include <memory>
-#include <cuda_runtime.h>
 #include "viewer.cuh"
 
 
