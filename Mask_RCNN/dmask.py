@@ -31,13 +31,27 @@ def preserve_small_objs(masks):
                 masks[:, :, sorted_idx[j]][masks[:, :, sorted_idx[i]] & masks[:, :, sorted_idx[j]]] = False
     return masks
 
+def filter_tiny_objects(masks):
+    """ Get rid of detection noise of objects
+    :param masks: existing masks
+    :return: clean masks    
+    """
+    areas = np.array([np.count_nonzero(masks[:, :, i]) for i in range(masks.shape[-1])])
+    save_idx = []
+    for idx, area in enumerate(areas):
+        if area > 2000:
+            save_idx.append(idx)
+    #print("Before filter: {} After filter: {}".format(len(areas), len(save_idx)))
+    return masks[:, :, save_idx]
 
-def mask_detect(model, rgb_image, depth_image=None):
+def mask_detect(model, rgb_image, depth_image=None, noise_remove=True):
     result = model.detect([rgb_image], verbose=0)[0]
     masks = result['masks']
     masks = masks.astype(np.bool)
     if depth_image is not None:
         masks = depth_filter(depth_image, masks)
+    if noise_remove:
+        masks = filter_tiny_objects(masks)
     masks = preserve_small_objs(masks)
     cls = np.zeros([rgb_image.shape[0], rgb_image.shape[1]], np.uint8)
     for i in range(masks.shape[2]):
