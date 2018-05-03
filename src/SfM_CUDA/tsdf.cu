@@ -54,22 +54,22 @@ __global__ void tsdf_kernel(float *tsdf_diff, uint8_t *tsdf_color, uint32_t *tsd
 	uint16_t weight = 1;
 	int vol_idx = vol_dim[1] * vol_dim[2] * vol_idx_x + vol_dim[2] * vol_idx_y + vol_idx_z;
 	tsdf_diff[vol_idx] = (tsdf_diff[vol_idx] * tsdf_wt[vol_idx] + weight * diff) / (tsdf_wt[vol_idx] + weight);
-	/*if (diff < 0.99f) {
+	if (diff < 0.99f) {
 		for (int i = 0; i < 3; i++) {
 			tsdf_color[vol_idx * 3 + i] = (tsdf_color[vol_idx * 3 + i] * tsdf_wt[vol_idx] + weight * color[img_idx * 3 + i]) / (tsdf_wt[vol_idx] + weight);
 		}
 		tsdf_cnt[vol_idx * MAX_OBJECTS + mask[img_idx]]++;
-	}*/
+	}
 	
-	for (int i = 0; i < 3; i++) {
+	/*for (int i = 0; i < 3; i++) {
 		tsdf_color[vol_idx * 3 + i] = (tsdf_color[vol_idx * 3 + i] * tsdf_wt[vol_idx] + weight * color[img_idx * 3 + i]) / (tsdf_wt[vol_idx] + weight);
 	}
-	tsdf_cnt[vol_idx * MAX_OBJECTS + mask[img_idx]]++;
+	tsdf_cnt[vol_idx * MAX_OBJECTS + mask[img_idx]]++;*/
 	tsdf_wt[vol_idx] += weight;
 	
 }
 
-__global__ void back_proj_kernel(float *s2w, float3 *vol_start, float3 *vol_end, float3 *voxel,
+__global__ void back_proj_kernel(float *K_inv, float *Rt, float3 *o, float3 *vol_start, float3 *vol_end, float3 *voxel,
 	int3 *vol_dim, float *tsdf_diff, uint32_t *tsdf_cnt,
 	int width, int height, float *probs, bool *box_mask)
 {
@@ -78,16 +78,18 @@ __global__ void back_proj_kernel(float *s2w, float3 *vol_start, float3 *vol_end,
 	if (idx_x >= width) return;
 	if (idx_y >= height) return;
 
-	float4 screen_pos = make_float4(idx_x, idx_y, 1.f, 1.f);
-	float3 target = make_float3(dot(make_float4(s2w[0], s2w[1], s2w[2], s2w[3]), screen_pos),
-		dot(make_float4(s2w[4], s2w[5], s2w[6], s2w[7]), screen_pos),
-		dot(make_float4(s2w[8], s2w[9], s2w[10], s2w[11]), screen_pos)
+	float3 screen_pos = make_float3(idx_x,  idx_y, 1.f);
+	float3 target = make_float3(dot(make_float3(K_inv[0], K_inv[1], K_inv[2]), screen_pos),
+		dot(make_float3(K_inv[4], K_inv[5], K_inv[6]), screen_pos),
+		dot(make_float3(K_inv[8], K_inv[9], K_inv[10]), screen_pos)
 	);
 
-	float3 d = normalize(target);
+	float3 d = normalize(make_float3(dot(make_float3(Rt[0], Rt[1], Rt[2]), target),
+		dot(make_float3(Rt[3], Rt[4], Rt[5]), target), 
+		dot(make_float3(Rt[6], Rt[7], Rt[8]), target)));
 	float3 inv_d = 1.f / d;
-	float3 tbot = inv_d * (vol_start[0]);
-	float3 ttop = inv_d * (vol_end[0]);
+	float3 tbot = inv_d * (vol_start[0] - o[0]);
+	float3 ttop = inv_d * (vol_end[0] - o[0]);
 
 	float3 tmin = make_float3(min(ttop.x, tbot.x), min(ttop.y, tbot.y), min(ttop.z, tbot.z));
 	float tnear = max(max(tmin.x, tmin.y), tmin.z);
@@ -102,11 +104,11 @@ __global__ void back_proj_kernel(float *s2w, float3 *vol_start, float3 *vol_end,
 	tfar -= 1e-6f;
 	float f_tt = 0;
 	float stepsize = voxel[0].x;
-	float f_t = interp_tsdf_diff(t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_diff);
+	float f_t = interp_tsdf_diff(o[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_diff);
 	if (f_t > 0) {
 		for (; t < tfar; t += stepsize)
 		{
-			f_tt = interp_tsdf_diff(t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_diff);
+			f_tt = interp_tsdf_diff(o[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_diff);
 			if (f_tt < 0.f)
 			{
 				break;
@@ -120,10 +122,10 @@ __global__ void back_proj_kernel(float *s2w, float3 *vol_start, float3 *vol_end,
 		if (f_tt < 0.f)
 		{
 			t += stepsize * f_tt / (f_t - f_tt);
-			interp_tsdf_cnt(t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_cnt, &probs[(idx_y * width + idx_x) * MAX_OBJECTS]);
+			interp_tsdf_cnt(o[0] + t * d, vol_start[0], voxel[0], vol_dim[0], tsdf_cnt, &probs[(idx_y * width + idx_x) * MAX_OBJECTS]);
 			for (int i = 0; i < MAX_OBJECTS; i++)
 			{
-				if (probs[(idx_y * width + idx_x) * MAX_OBJECTS + i] > 1e-6f)
+				if (probs[(idx_y * width + idx_x) * MAX_OBJECTS + i] > 0.3f)
 				{
 					box_mask[(idx_y * width + idx_x) * MAX_OBJECTS + i] = true;
 				}
@@ -208,7 +210,7 @@ void TSDF::parse_frame(const cv::Mat& depth, const cv::Mat& color, cv::Mat& mask
 		box_mask = new bool[depth.cols * depth.rows * MAX_OBJECTS]{};
 		
 		init_cuda_vars(depth.cols, depth.rows);
-		parse_frame(depth, color, masks, extrinsic, mean_depth);
+		//parse_frame(depth, color, masks, extrinsic, mean_depth);
 	}
 	else {
 		
@@ -265,6 +267,12 @@ void TSDF::init_cuda_vars(int width, int height) {
 	cudaMalloc(&intrinsic_d, 16 * sizeof(float));
 	cudaMemcpy(intrinsic_d, intrinsic_.data, 16 * sizeof(float), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&Rt_d, 9 * sizeof(float));
+	cudaMalloc(&o_d, 3 * sizeof(float));
+
+	cudaMalloc(&intrinsic_inv_d, 16 * sizeof(float));
+	cudaMemcpy(intrinsic_inv_d, intrinsic_inv_.data, 16 * sizeof(float), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&depth_d, width * height * sizeof(uint16_t));
 	cudaMalloc(&color_d, width * height * 3 * sizeof(uint8_t));
 	cudaMalloc(&mask_d, width * height * sizeof(uint8_t));
@@ -288,6 +296,9 @@ void TSDF::free_cuda_vars() {
 	cudaFree(color_d);
 	cudaFree(mask_d);
 	cudaFree(extrinsic2init_d);
+	cudaFree(Rt_d);
+	cudaFree(intrinsic_inv_d);
+	cudaFree(o_d);
 }
 
 void TSDF::filter_overlaps(float *probs, int width, int height, cv::Mat& mask, bool *box_mask) {
@@ -368,10 +379,6 @@ void TSDF::filter_overlaps(float *probs, int width, int height, cv::Mat& mask, b
 			if (extra_assign.find(mask_ptr[i]) == extra_assign.end())
 			{
 				extra_assign[mask_ptr[i]] = num_objs;
-				if (num_objs == 16)
-				{
-					std::cout << num_objs << ", " <<  (int)mask_ptr[i] << std::endl;
-				}
 				mask_ptr[i] = num_objs;
 				num_objs++;
 			}
@@ -385,13 +392,20 @@ void TSDF::filter_overlaps(float *probs, int width, int height, cv::Mat& mask, b
 	float *ptr = (float*)test.data;
 	for (int i = 0; i < total; i++)
 	{
-		ptr[i] = (mask_ptr[i] == 16) ? 1.f : 0.f;
+		for (int j = 0; j < MAX_OBJECTS; j++) {
+			if (probs[i * MAX_OBJECTS + 1] > 1e-3f)
+			{
+				ptr[i] = 1.f;
+				break;
+			}
+		}
 	}
-	cv::imshow("after", test);
+	cv::imshow("before", test);
 	cv::waitKey(0);*/
+
 	/*for (int i = 0; i < total; i++)
 	{
-		ptr[i] = (mask_ptr[i] == 2) ? 1.f : 0.f;
+		ptr[i] = (mask_ptr[i] == 13) ? 1.f : 0.f;
 	}
 	cv::imshow("after", test);
 	cv::waitKey();*/
@@ -409,16 +423,25 @@ void TSDF::launch_kernel(const cv::Mat& depth, const cv::Mat& color, cv::Mat& ma
 	cudaMemcpy(color_d, color.data, width * height * 3 * sizeof(uint8_t), cudaMemcpyHostToDevice);
 	cudaMemcpy(extrinsic2init_d, extrinsic2init.data, 16 * sizeof(float), cudaMemcpyHostToDevice);
 
-
 	if (n_obs_ > 0)
 	{
 		cudaMemset(probs_d, 0, width * height * MAX_OBJECTS * sizeof(float));
 		cudaMemset(box_mask_d, 0, width * height * MAX_OBJECTS * sizeof(bool));
-		cv::Mat s2w = extrinsic2init.inv() * intrinsic_inv_;
-		cudaMemcpy(s2w_d, s2w.data, 16 * sizeof(float), cudaMemcpyHostToDevice);
+		//std::cout << intrinsic_inv_ << std::endl;
+		//std::cout << extrinsic2init.inv() << std::endl;
+		cv::Mat Rt = extrinsic2init(cv::Rect(0, 0, 3, 3)).t();
+		cv::Mat t = extrinsic2init(cv::Rect(3, 0, 1, 3));
+		
+		cv::Mat o = -Rt * t;
+		std::cout << o << std::endl;
+		std::cout << Rt << std::endl;
+		cudaMemcpy(Rt_d, Rt.data, 9 * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(o_d, o.data, 3 * sizeof(float), cudaMemcpyHostToDevice);
 
 		back_proj_kernel << <dim3((width - 1) / 32 + 1, (height - 1) / 32 + 1, 1), dim3(32, 32, 1) >> > (
-			s2w_d,
+			intrinsic_inv_d,
+			Rt_d,
+			(float3*)o_d,
 			(float3*)vol_start_d,
 			(float3*)vol_end_d,
 			(float3*)voxel_d,
@@ -430,12 +453,12 @@ void TSDF::launch_kernel(const cv::Mat& depth, const cv::Mat& color, cv::Mat& ma
 			probs_d,
 			box_mask_d
 			);
-		
+
 		cudaMemcpy(probs, probs_d, MAX_OBJECTS * width * height * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(box_mask, box_mask_d, MAX_OBJECTS * width * height * sizeof(bool), cudaMemcpyDeviceToHost);
-		
+
 		filter_overlaps(probs, width, height, masks, box_mask);
-		
+
 	}
 	else {
 		double max_double;
@@ -463,6 +486,8 @@ void TSDF::launch_kernel(const cv::Mat& depth, const cv::Mat& color, cv::Mat& ma
 		width,
 		height
 	);
+
+	
 
 	/*cudaMemcpy(tsdf_diff_, tsdf_diff_d, size * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(tsdf_wt_, tsdf_wt_d, size * sizeof(int), cudaMemcpyDeviceToHost);

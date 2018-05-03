@@ -38,6 +38,9 @@ public:
 	float *probs_d;
 	bool *box_mask_d;
 	float *s2w_d;
+	float *Rt_d;
+	float *intrinsic_inv_d;
+	float *o_d;
 
 private:
 	uint32_t n_obs_;
